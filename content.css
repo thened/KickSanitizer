@@ -1158,3 +1158,138 @@ body.ks-eightbit #ks-mirror .ks-mirror-row span.text-neutral {
 body.ks-eightbit #ks-mirror .ks-mirror-row img {
   image-rendering: pixelated;
 }
+
+/* Tube: the live-chat layout used by the big video site — avatar, timestamp,
+   @handle, message running on inline after it.
+   Named generically. The layout and colours are not anyone's property; the
+   brand name is. This copies the former and avoids the latter.
+
+   The avatar is GENERATED, not fetched: Kick's chat rows carry no profile
+   image, and pulling one per chatter would mean a request per user for
+   decoration. An initial on a coloured disc, keyed off the username hash the
+   colour-blind-safe theme already stamps on every row, costs nothing and is
+   stable per person. */
+body.ks-tube #ks-mirror {
+  /* One number controls the avatar. It drives the disc, its offset and the
+     row's left padding, which were three hard-coded values that had to be kept
+     in agreement by hand. */
+  /* 150x150 at source and square, so there is resolution to spare — even at 2x
+     this only needs 56 device pixels. Sized against the reference rather than
+     the minimum: the layout it copies runs its avatars noticeably larger than
+     the text. */
+  --ks-avatar-size: 28px;
+  --ks-avatar-gap: 10px;
+  background: #0f0f0f;
+  gap: 0;
+  padding: 4px 0;
+}
+body.ks-tube #ks-mirror .ks-mirror-row {
+  position: relative !important;
+  padding: 6px 16px 6px
+           calc(var(--ks-avatar-gap) + var(--ks-avatar-size) + var(--ks-avatar-gap)) !important;
+  border-radius: 0;
+}
+body.ks-tube #ks-mirror .ks-mirror-row:hover {
+  background: rgba(255, 255, 255, .05) !important;
+}
+body.ks-tube #ks-mirror .ks-mirror-row,
+body.ks-tube #ks-mirror .ks-mirror-row * {
+  font-family: Roboto, "Segoe UI", Arial, sans-serif !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+  background: transparent !important;
+  text-shadow: none !important;
+  letter-spacing: 0 !important;
+}
+
+/* The disc. Drawn on the row itself so it does not disturb the text flow, and
+   only where a username was captured — notice cards have none. */
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-initial]::before {
+  content: attr(data-ks-initial);
+  position: absolute;
+  left: var(--ks-avatar-gap);
+  top: 6px;
+  width: var(--ks-avatar-size);
+  height: var(--ks-avatar-size);
+  box-sizing: border-box;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Half the disc, so the letter scales with it rather than needing its own
+     adjustment every time the size changes. */
+  font-size: calc(var(--ks-avatar-size) / 2) !important;
+  font-weight: 500;
+  color: #fff;
+  /* background-COLOR, never the shorthand: the shorthand resets
+     background-size/position/repeat, and these rules sit after the avatar
+     rule — which is how a scaled, centred image ended up drawn at its
+     natural size, anchored top-left and tiling. */
+  background-color: #606060;
+}
+/* Once a real picture has loaded it replaces the disc entirely — the initial
+   goes transparent rather than being removed, so the box keeps its size and
+   nothing reflows when the image lands. */
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-avatar]::before {
+  background-image: var(--ks-avatar) !important;
+  /* `contain`, not `cover`. cover fills the circle by cropping whatever does
+     not fit, which is invisible on the square 150x150 sources Kick usually
+     serves but silently trims the edges off any avatar that is not square.
+     contain scales the whole image to fit instead, so nothing is lost.
+     Where the aspect does not match, the generated disc colour shows through
+     behind it — which is why the background colour is kept rather than
+     overridden, and why it reads as deliberate rather than as a gap. */
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  color: transparent;
+}
+
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-cvd="0"]::before { background-color: #c0392b; }
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-cvd="1"]::before { background-color: #2b6cb0; }
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-cvd="2"]::before { background-color: #2f855a; }
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-cvd="3"]::before { background-color: #b7791f; }
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-cvd="4"]::before { background-color: #97266d; }
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-cvd="5"]::before { background-color: #6b46c1; }
+body.ks-tube #ks-mirror .ks-mirror-row[data-ks-cvd="6"]::before { background-color: #2c7a7b; }
+
+/* Timestamp first, then the handle. Forced visible: Kick hides these behind a
+   custom property by default, and the layout being copied always shows one. */
+body.ks-tube #ks-mirror .ks-mirror-row span.text-neutral {
+  display: inline !important;
+  color: #717171 !important;
+  font-size: 11px !important;
+  margin-right: 4px;
+}
+
+/* @handle in blue. Every account the same colour — the original does not tint
+   names per user, and Kick's per-user colours are the detail that would give
+   it away. */
+body.ks-tube #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  color: #7fb2ff !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+}
+body.ks-tube #ks-mirror .ks-mirror-row button[data-prevent-expand]::before {
+  content: "@";
+}
+
+body.ks-tube #ks-mirror .ks-mirror-row span.font-normal {
+  color: #f1f1f1 !important;
+}
+
+/* The colon Kick puts after the name. The layout being copied has no separator,
+   just a gap.
+   The gap is a margin on the handle, NOT generated content: a `content: " "` in
+   a ::after is whitespace, and whitespace processing collapses it away to
+   nothing — which is why the handle and the message ran together as one word. */
+body.ks-tube #ks-mirror .ks-mirror-row span[aria-hidden="true"] {
+  display: none !important;
+}
+body.ks-tube #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  margin-right: 6px;
+}
+
+body.ks-tube #ks-mirror .ks-mirror-row img {
+  vertical-align: middle;
+}

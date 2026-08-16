@@ -28,6 +28,10 @@ KS.ChatSocket = (function () {
   let _room = null;
   let _slug = null;
   let _backoff = 1000;
+  // Field names from the first ChatMessageEvent sender we see. Names only, no
+  // values — enough to answer "does this carry a profile image" without having
+  // to guess, and without recording anything about a person.
+  let _senderKeys = null;
   let _opens = 0;
   let _closes = 0;
   let _closing = false;
@@ -114,6 +118,12 @@ KS.ChatSocket = (function () {
 
       switch (ev) {
         case 'ChatMessageEvent':
+          if (!_senderKeys && d.sender && typeof d.sender === 'object') {
+            _senderKeys = Object.keys(d.sender).slice(0, 30);
+            if (d.sender.identity && typeof d.sender.identity === 'object') {
+              _senderKeys.push('identity:{' + Object.keys(d.sender.identity).join(',') + '}');
+            }
+          }
           if (_handlers.message) _handlers.message({
             id: d.id,
             username: (d.sender && d.sender.username) || '',
@@ -160,7 +170,9 @@ KS.ChatSocket = (function () {
     try { if (_ws && _ws.readyState === 1) _ws.send(JSON.stringify(obj)); } catch (_) { }
   }
 
-  function stats() { return { opens: _opens, closes: _closes, room: _room, slug: _slug }; }
+  function stats() {
+    return { opens: _opens, closes: _closes, room: _room, slug: _slug, senderKeys: _senderKeys };
+  }
 
   return { connect, disconnect, isConnected, stats };
 }());

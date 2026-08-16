@@ -36,6 +36,7 @@
     KS.getEffectiveSettings(KS.Sel.getCurrentChannel()).then((settings) => {
       _settings = settings;
       _currentChannel = KS.Sel.getCurrentChannel();
+      if (KS.Avatars) KS.Avatars.setChannel(_currentChannel);
 
       KS.ChatFilters.init(_settings);
       KS.PageFilters.init(_settings);
@@ -218,6 +219,7 @@
       // Chatters are per-channel by definition; carrying them across would
       // report the previous channel's crowd as this one's.
       if (KS.Chatters) KS.Chatters.reset();
+      if (KS.Avatars) KS.Avatars.setChannel(newChannel);
       // Explicit, and only here: a different channel means a different count.
       if (KS.ChatFilters.resetCounts) KS.ChatFilters.resetCounts();
     }
@@ -745,6 +747,7 @@
         mirrorRows: document.querySelectorAll('#ks-mirror .ks-mirror-row').length,
         channel: _currentChannel || null,
         navs: _navCount,
+        avatars: (KS.Avatars && KS.Avatars.stats) ? KS.Avatars.stats() : null,
         viewers: (KS.PageFilters && KS.PageFilters.viewerStats)
           ? KS.PageFilters.viewerStats() : null,
         at: new Date().toLocaleTimeString(),   // so a stale read is obvious

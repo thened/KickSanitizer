@@ -31,6 +31,7 @@ KS.DEFAULT_SETTINGS = {
   chat_minMessageLength: 0,           // 0 = off; hide messages shorter than N chars
   chat_hideBotGames: false,           // !fish etc. and the bot replies to them
   chat_botGameCommands: 'fish,hunt,duel,flag,country,guess,slots,cookie,mine,farm',
+  chat_hideLevelUps: false,           // "@user just reached level N!" from chat bots
   chat_hideBotResponses: false,
   chat_hideAllCaps: false,
   chat_hideRepeatedChars: false,

@@ -193,6 +193,10 @@ KS.ChatFilters = (function () {
     // hid the whole row (nothing left but emotes that are now gone).
     if (_applyEmoteRules(msgEl, s)) return;
 
+    if (s.chat_hideLevelUps && text && _isLevelUpNotice(text, username)) {
+      return _hide(msgEl, 'level-up');
+    }
+
     // Bot commands (!command)
     if (s.chat_hideBotCommands && text && KS.Normalize.isBotCommand(text)) {
       return _hide(msgEl, 'bot-command');
@@ -543,6 +547,30 @@ KS.ChatFilters = (function () {
   function isRedemptionNotice(msgEl) {
     if (!_isNoticeCard(msgEl)) return false;
     return !!msgEl.querySelector('svg[data-ds-icon="Bubbles"]');
+  }
+
+  // Level-up announcements: "@someone just reached level 23!"
+  //
+  // Its own filter rather than leaning on chat_hideBotResponses, which would
+  // take every bot message with it — including replies to commands you ran.
+  //
+  // Requires BOTH the announcement shape and an @mention or a known bot as the
+  // sender. The phrase alone would catch a person saying "I just reached level
+  // 23", which is someone talking about themselves, not spam.
+  //
+  // Text-based, so it is English-only and will silently stop working for anyone
+  // reading Kick in another language. There is no structural marker on these —
+  // they are ordinary chat messages from a bot account, with no card, icon or
+  // testid to key on.
+  function _isLevelUpNotice(text, username) {
+    const t = String(text || '').trim();
+    if (!t) return false;
+    if (!/(?:just |has )?reached level\s*\d+|level(?:l)?ed up to\s*\d+|is now level\s*\d+/i.test(t)) {
+      return false;
+    }
+    if (/@\S+/.test(t)) return true;
+    const u = String(username || '').toLowerCase();
+    return !!(KS.Sel.knownChatBots || []).some(b => String(b).toLowerCase() === u);
   }
 
   function isFollowNotice(msgEl) {

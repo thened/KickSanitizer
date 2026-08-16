@@ -16,6 +16,7 @@
     chat_copypastaThreshold: 5,
     chat_copypastaWindowSeconds: 60,
     chat_hideBotCommands: false,
+    chat_hideLevelUps: false,
     chat_hideBotResponses: false,
     chat_hideAllCaps: false,
     chat_hideRepeatedChars: false,

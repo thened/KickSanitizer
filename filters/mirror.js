@@ -66,6 +66,7 @@ KS.Mirror = (function () {
       ['psychedelic','🌀 Psychedelic'],
       ['hypnotoad',  '🐸 Hypnotoad'],
       ['eightbit',   '🎮 8-bit'],
+      ['tube',       '▶ Tube'],
     ]],
   ];
 
@@ -1196,6 +1197,17 @@ KS.Mirror = (function () {
     if (username) {
       clone.dataset.ksUser = username;
       clone.dataset.ksCvd = String(_colourSlot(username));
+      // First character, for themes that draw a generated avatar. CSS can read
+      // an attribute but cannot take a substring of one, so it has to be stored
+      // separately rather than derived from data-ks-user.
+      clone.dataset.ksInitial = username.trim().charAt(0).toUpperCase();
+      // Real pictures, but only for the theme that shows them: this is the one
+      // place the extension makes a request per chatter, and it should not
+      // happen for the fourteen themes that would never draw the result.
+      if (KS.Avatars && _settings && _settings.chat_theme === 'tube') {
+        KS.Avatars.decorate(clone, username);   // instant, if already known
+        KS.Avatars.want(username);              // otherwise queue a lookup
+      }
     }
     const id = _takeId(username, text);
     if (id) clone.dataset.ksMsgId = id;
