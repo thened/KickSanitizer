@@ -721,10 +721,70 @@ KS.Mirror = (function () {
       const isLevel = /^level\s/i.test(alt);
 
       for (let el = root; el && el !== clone; el = el.parentElement) {
-        if (el !== root && count(el) > 1) break;
+        if (el !== root) {
+          // The shared container, when the message carries more than one badge.
+          if (count(el) > 1) break;
+          // With a SINGLE badge no ancestor ever holds two, so the count test
+          // alone let the climb run all the way to the row and tag the message
+          // body — hiding that kind of badge then hid the whole message. Badge
+          // wrappers contain nothing but the image; anything with text or a
+          // control is already the message.
+          if ((el.textContent || '').trim()) break;
+          if (el.querySelector('button, [data-emote-id]')) break;
+        }
         el.classList.add('ks-badge', isMod ? 'ks-badge-mod' : 'ks-badge-other');
         if (isLevel) el.classList.add('ks-badge-level');
       }
+    }
+  }
+
+  const BADGE_SEL = '[data-testid^="identity-badge-"], img[src*="/chat/badges/"]';
+
+  // The outermost wrapper that holds badges and nothing else. Found by climbing
+  // while the parent has no text, which is what separates badge wrappers from
+  // the message body.
+  function _badgeBox(row) {
+    const first = row.querySelector(BADGE_SEL);
+    if (!first) return null;
+    let el = first;
+    while (el.parentElement && el.parentElement !== row &&
+           !(el.parentElement.textContent || '').trim()) {
+      el = el.parentElement;
+    }
+    return el;
+  }
+
+  // Badges are filled in by React AFTER the row first appears, so a clone taken
+  // on sight may miss them — and since the clone is a static snapshot and
+  // dedupe skips the re-created row, it would never gain them. Whether a badge
+  // survived was a race, which is why they came and went between messages.
+  //
+  // Re-read the original a moment later and adopt what it has. Deliberately
+  // one-directional: it only ever copies badges the live original is showing,
+  // so it cannot invent or resurrect anything. Two passes, because the
+  // virtualiser re-renders on its own schedule.
+  function _syncBadgesLater(clone, msgEl) {
+    for (const delay of [400, 1400]) {
+      setTimeout(() => {
+        if (!clone.isConnected) return;
+        const src = (msgEl && msgEl.isConnected) ? msgEl : _liveOriginal(clone);
+        if (!src) return;
+        if (src.querySelectorAll(BADGE_SEL).length <= clone.querySelectorAll(BADGE_SEL).length) return;
+
+        const srcBox = _badgeBox(src);
+        if (!srcBox) return;
+        const copy = srcBox.cloneNode(true);
+        const dstBox = _badgeBox(clone);
+        if (dstBox) {
+          dstBox.replaceWith(copy);
+        } else {
+          // No badges at all yet. They sit beside the username in Kick's markup.
+          const nameBtn = clone.querySelector('button[data-prevent-expand]');
+          if (!nameBtn) return;
+          nameBtn.before(copy);
+        }
+        _tagBadges(clone);
+      }, delay);
     }
   }
 
@@ -853,6 +913,7 @@ KS.Mirror = (function () {
 
     const stick = _stick;
     _insertOrdered(clone, _rowIndex(msgEl));
+    _syncBadgesLater(clone, msgEl);
     _prune();
     _updateCount();
     if (stick) _scrollToBottom();
