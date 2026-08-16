@@ -29,7 +29,8 @@ say what a product works with is permitted; using it as your own name is not.
 Worth doing before committing to it: search the Web Store for existing
 extensions called Matcha Filter. A clash is not fatal but is worth knowing about.
 
-Two repos: this one stays as the development repo under its current name, and
+Two repos: this one stays as the development repo under its current name — kept
+deliberately, so people who already know it are not confused by a rename — and
 the submitted version gets a new public repo named `matcha-filter`. That keeps the dev
 history out of the public one and gives the new name a clean start.
 
