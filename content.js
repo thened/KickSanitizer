@@ -38,6 +38,7 @@
         _injectPageButton();
         _startButtonWatch();
         _startInputFocusWatch();
+        _identifyViewer();
       }, 800);
 
       _startObserver();
@@ -491,6 +492,43 @@
     _claimStage = 0;
     _claimDlg = null;
     _claimCta = null;
+  }
+
+  // Who is watching. Needed so a message that @-mentions you is exempt from
+  // every filter. Asked once per page; if it fails the name stays empty and the
+  // exemption simply never triggers — better than guessing a name and exempting
+  // a stranger.
+  // /api/v1/user was tried first and returns {} — confirmed live, not a guess
+  // worth repeating. The header avatar carries the name in its alt text, which
+  // has the advantage of being user-visible: if Kick changes it, the breakage is
+  // observable rather than silent.
+  //
+  // The header renders after our 800ms boot on a cold load, so this retries a
+  // few times and then gives up. Failing means _mentionsMe stays false, which
+  // costs an exemption; guessing a name would exempt a stranger from every
+  // filter, which is worse.
+  function _identifyViewer(attempt) {
+    if (!KS.ChatFilters || !KS.ChatFilters.setViewer) return;
+    attempt = attempt || 0;
+
+    const imgs = document.querySelectorAll('header img[alt], nav img[alt]');
+    for (const img of imgs) {
+      const alt = (img.alt || '').trim();
+      // The Kick wordmark sits in the same bar and also carries an alt.
+      if (alt && !/kick\s*logo/i.test(alt)) { KS.ChatFilters.setViewer(alt); return; }
+    }
+
+    // Fallback: several localStorage entries embed the logged-in identity as
+    // JSON. Read any "username":"..." rather than depending on one key name —
+    // the one seen live is a fingerprinting cache key, which is not something to
+    // rely on by name.
+    for (let i = 0; i < localStorage.length; i++) {
+      const v = localStorage.getItem(localStorage.key(i)) || '';
+      const m = v.match(/"username"\s*:\s*"([^"]+)"/);
+      if (m && m[1]) { KS.ChatFilters.setViewer(m[1]); return; }
+    }
+
+    if (attempt < 4) setTimeout(() => _identifyViewer(attempt + 1), 1500);
   }
 
   function _applyTimestamps(show) {

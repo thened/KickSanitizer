@@ -204,3 +204,37 @@ Kick renders → MutationObserver → chatFilters.processMessage
   React re-renders. `content.js` re-injects on a 2s watchdog.
 - Emote-only messages normalise to `''`. Without an empty-text guard every one
   of them counts as a duplicate of the last.
+- Badge `<img>` elements sit inside a `<div data-state="closed">` wrapper. Hiding
+  the img alone leaves an empty flex child that still takes a `gap` slot, so a
+  stray space appears before the username. Hide the wrapper via
+  `div:has(> img[...])`.
+- Level badges are identified by `alt="Level N"`, **not** by the `/chat/badges/`
+  src path — that path may serve other badge types, and over-hiding a subscriber
+  or moderator badge destroys information the reader needs. Fail open here.
+
+### Muted users — unresolved
+
+Kick's mute list is in **localStorage under `silencedUsers`** (confirmed live).
+
+An earlier sweep concluded it was server-side. That was wrong: the sweep searched
+localStorage *values* for known muted usernames and matched nothing, which means
+`silencedUsers` stores IDs rather than names. Search by key, not by expected
+content. Its exact shape is not yet read.
+
+Related: the logged-in user's own identity is NOT available from `/api/v1/user`
+— that returns `{}`. It is on the header avatar's `alt`, and also embedded as
+`"username":"..."` inside several unrelated localStorage entries.
+
+What is not yet established is whether Kick drops a muted user's message before
+render or renders the row and hides it. The mirror clones DOM rows, so the second
+case would put a muted user back on screen. `Mirror._isSuppressedByKick()` guards
+against it by skipping any row whose computed `display`/`visibility`/`opacity`
+says it is not being shown — correct under either behaviour, a no-op under the
+first.
+
+To settle it: mute someone who is **actively talking**, then check whether their
+rows still exist in `[data-index]`. A probe against idle muted users proves
+nothing — they simply may not have spoken. If rows do survive with
+`display: none`, the guard is load-bearing and it becomes worth finding the
+endpoint behind the Muted Users panel so the mirror can filter by username
+directly rather than depending on Kick's CSS staying the same.

@@ -49,16 +49,18 @@ body.ks-mirror-on [data-testid="chatroom-messages"] {
    list so it neither scrolls away nor gets swept up by the row pruner.
    No z-index — it is a later sibling than #ks-mirror, so it paints above the
    rows without competing with Kick's own overlays. */
+/* Stacked rows: controls on top, status beneath. Height is NOT fixed — the
+   controls row will gain more than the theme picker, and mirror.js measures the
+   bar to inset the list, so it adapts on its own. */
 .ks-mirror-header {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 24px;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px 6px;
   background: rgba(83, 252, 24, 0.07);
   border-bottom: 1px solid rgba(83, 252, 24, 0.22);
   font-size: 11px;
@@ -191,11 +193,34 @@ body.ks-mirror-on [data-testid="chatroom-messages"] {
 
 /* Rows are clones of Kick's own markup, so they bring their own styling.
    Only the absolute positioning has to be undone. */
+/* `relative`, not `static`. With `inset: auto` this lays out identically to
+   static, but it makes the row a containing block. Kick's per-message toolbar
+   is absolutely positioned; under `static` it had no positioned ancestor inside
+   the message and anchored to #ks-mirror instead, so every surviving reply
+   control stacked up in one corner of the list rather than sitting on its own
+   message. transform/inset still neutralise the virtualiser's placement. */
 #ks-mirror .ks-mirror-row {
-  position: static !important;
+  position: relative !important;
   transform: none !important;
   inset: auto !important;
   width: 100%;
+}
+
+/* The reply control, hoisted out of Kick's toolbar wrapper by ingest() and
+   placed by us. Hidden until the row is hovered, which is how Kick behaves —
+   and it must not occupy layout, or every message would reserve space for it. */
+#ks-mirror .ks-mirror-row .ks-reply {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease-out;
+}
+#ks-mirror .ks-mirror-row:hover .ks-reply,
+#ks-mirror .ks-mirror-row:focus-within .ks-reply {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Taken off-stage rather than hidden: kept laid out and interactive, just
@@ -540,34 +565,139 @@ body.ks-clown #ks-mirror .ks-mirror-row:nth-child(6n)   span.font-normal { color
 body.ks-clown #ks-mirror .ks-mirror-row:nth-child(2n) { transform: rotate(-.35deg); }
 body.ks-clown #ks-mirror .ks-mirror-row:nth-child(2n+1) { transform: rotate(.35deg); }
 
-/* Terminal: one phosphor colour, monospace, no badges or avatars. Usernames
-   keep their weight but lose Kick's per-user colour, which is the point. */
+/* Terminal and CRT Amber: one phosphor colour, monospace, no badges or avatars.
+   Usernames keep their weight but lose Kick's per-user colour, which is the
+   point. The two themes differ only in the phosphor, so they share every rule
+   below and set --ks-phosphor / --ks-glow / --ks-emote-hue between them rather
+   than duplicating the block. */
 body.ks-terminal #ks-mirror {
+  --ks-phosphor: #33ff66;
+  --ks-glow: rgba(51, 255, 102, .45);
+  --ks-emote-hue: 70deg;
+}
+body.ks-amber #ks-mirror {
+  --ks-phosphor: #ffb000;
+  --ks-glow: rgba(255, 176, 0, .45);
+  --ks-emote-hue: 0deg;
+}
+body.ks-terminal #ks-mirror,
+body.ks-amber #ks-mirror {
   background: #000;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace !important;
 }
 body.ks-terminal #ks-mirror .ks-mirror-row,
-body.ks-terminal #ks-mirror .ks-mirror-row * {
+body.ks-terminal #ks-mirror .ks-mirror-row *,
+body.ks-amber #ks-mirror .ks-mirror-row,
+body.ks-amber #ks-mirror .ks-mirror-row * {
   font-family: inherit !important;
-  color: #33ff66 !important;
-  text-shadow: 0 0 4px rgba(51, 255, 102, .45);
+  color: var(--ks-phosphor) !important;
+  text-shadow: 0 0 4px var(--ks-glow);
   background: transparent !important;
 }
-/* Badges and level pips only. NOT every img/svg — that would take the emotes
-   and the reply control's icon with it, leaving an invisible button. */
-body.ks-terminal #ks-mirror [data-testid^="identity-badge-"],
-body.ks-terminal #ks-mirror .ks-mirror-row img[src*="/chat/badges/"],
-body.ks-terminal #ks-mirror .ks-mirror-row img[src*="subscriber_badges"] {
+/* Badges. Kinds are tagged onto the clone by Mirror._tagBadges — CSS never has
+   to know how deeply Kick nests them, which is what the earlier :has() chains
+   kept getting wrong.
+
+   ks-badge-mod    moderator / broadcaster / host — authority, kept by default
+   ks-badge-other  everything else (subscriber, level, ...)
+   ks-badge-level  level badges specifically, hidden by default
+
+   Themes that drop identity decoration take the lot. Emotes and the reply icon
+   are untouched: only tagged badge elements match here. */
+body.ks-hide-level-badges #ks-mirror .ks-badge-level,
+body.ks-hide-mod-badges   #ks-mirror .ks-badge-mod,
+body.ks-hide-other-badges #ks-mirror .ks-badge-other,
+body:is(.ks-terminal, .ks-amber, .ks-typewriter,
+        .ks-contrast, .ks-minimal) #ks-mirror .ks-badge {
   display: none !important;
 }
 
 /* Usernames as <handle>. Scoped to the username button so the reply control
    does not render as an empty pair of brackets. */
-body.ks-terminal #ks-mirror button[data-prevent-expand] { text-transform: lowercase; }
-body.ks-terminal #ks-mirror button[data-prevent-expand]::before { content: "<"; }
-body.ks-terminal #ks-mirror button[data-prevent-expand]::after { content: ">"; }
+body.ks-terminal #ks-mirror button[data-prevent-expand],
+body.ks-amber #ks-mirror button[data-prevent-expand] { text-transform: lowercase; }
+body.ks-terminal #ks-mirror button[data-prevent-expand]::before,
+body.ks-amber #ks-mirror button[data-prevent-expand]::before { content: "<"; }
+body.ks-terminal #ks-mirror button[data-prevent-expand]::after,
+body.ks-amber #ks-mirror button[data-prevent-expand]::after { content: ">"; }
 
 /* Emotes survive, desaturated so they sit inside the phosphor palette. */
-body.ks-terminal #ks-mirror span[data-emote-id] img {
-  filter: grayscale(1) sepia(1) hue-rotate(70deg) saturate(3) brightness(.9);
+body.ks-terminal #ks-mirror span[data-emote-id] img,
+body.ks-amber #ks-mirror span[data-emote-id] img {
+  filter: grayscale(1) sepia(1) hue-rotate(var(--ks-emote-hue)) saturate(3) brightness(.9);
 }
+
+/* Typewriter: a chat log that reads like a transcript. Cream stock, dark ink,
+   a typebar face. Emotes stay — stripping them would lose the message — but
+   they are knocked back so they read as marks on paper rather than stickers. */
+body.ks-typewriter #ks-mirror {
+  background: #f4efe2;
+  font-family: "Courier New", Courier, "Nimbus Mono PS", monospace !important;
+}
+body.ks-typewriter #ks-mirror .ks-mirror-row,
+body.ks-typewriter #ks-mirror .ks-mirror-row * {
+  font-family: inherit !important;
+  color: #2b2620 !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+body.ks-typewriter #ks-mirror .ks-mirror-row {
+  border-bottom: 1px dotted rgba(43, 38, 32, .18);
+  padding-bottom: 2px;
+}
+body.ks-typewriter #ks-mirror button[data-prevent-expand] { text-transform: uppercase; }
+body.ks-typewriter #ks-mirror span[data-emote-id] img {
+  filter: grayscale(1) contrast(1.15) opacity(.75);
+}
+
+/* High Contrast: black on white, one weight of emphasis, nothing decorative.
+   Kick's per-user name colours are the first thing to go — they are the least
+   legible part of the default chat. */
+body.ks-contrast #ks-mirror {
+  background: #000;
+  font-size: 15px;
+}
+/* `opacity: 1 !important` forces through anything Kick dims for legibility, but
+   it must not reach .ks-reply — that control is hidden with opacity and shown on
+   hover, and a blanket override pinned it visible on every message. Excluded by
+   name rather than fought with specificity: an !important on a `*` rule beats
+   our shorter selector no matter how it is written. */
+body.ks-contrast #ks-mirror .ks-mirror-row,
+body.ks-contrast #ks-mirror .ks-mirror-row *:not(.ks-reply):not(.ks-reply *) {
+  color: #fff !important;
+  background: transparent !important;
+  text-shadow: none !important;
+  opacity: 1 !important;
+}
+/* The icon inside still needs the colour treatment, just not the opacity. */
+body.ks-contrast #ks-mirror .ks-mirror-row .ks-reply,
+body.ks-contrast #ks-mirror .ks-mirror-row .ks-reply * {
+  color: #fff !important;
+  background: transparent !important;
+}
+body.ks-contrast #ks-mirror .ks-mirror-row {
+  border-bottom: 1px solid #fff;
+  padding: 3px 0;
+  line-height: 1.5;
+}
+body.ks-contrast #ks-mirror button[data-prevent-expand] {
+  font-weight: 800 !important;
+  text-decoration: underline;
+}
+
+/* Minimal: no badges, no colour, no emphasis. Names recede to grey so the
+   message text is the only thing with contrast. Emotes go too — this is the
+   one theme where the point is fewer things on screen, and the emote-only
+   filter already exists for anyone who wants to keep them. */
+body.ks-minimal #ks-mirror .ks-mirror-row,
+body.ks-minimal #ks-mirror .ks-mirror-row * {
+  color: #d4d4d4 !important;
+  background: transparent !important;
+  text-shadow: none !important;
+  font-weight: 400 !important;
+}
+body.ks-minimal #ks-mirror button[data-prevent-expand] {
+  color: #7a7a7a !important;
+  font-weight: 400 !important;
+}
+body.ks-minimal #ks-mirror span[data-emote-id] { display: none !important; }

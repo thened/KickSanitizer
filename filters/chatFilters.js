@@ -61,6 +61,24 @@ KS.ChatFilters = (function () {
     }
   }
 
+  // ── Who "me" is ────────────────────────────────────────────────────────────
+  //
+  // Set by content.js once Kick tells us. Until then it stays empty and
+  // _mentionsMe is simply false — it never guesses, because a wrong name would
+  // exempt a stranger's messages from every filter.
+  let _me = '';
+
+  function setViewer(username) {
+    _me = String(username || '').trim().toLowerCase();
+  }
+
+  function _mentionsMe(text) {
+    if (!_me || !text) return false;
+    const escaped = _me.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Trailing boundary so "@ned" does not match "@nedbot".
+    return new RegExp('@' + escaped + '\\b', 'i').test(text);
+  }
+
   // ── Main entry point ───────────────────────────────────────────────────────
 
   // Kick's own chat is READ-ONLY.
@@ -96,6 +114,17 @@ KS.ChatFilters = (function () {
     const _seenAt = Number(msgEl.dataset.ksSeen) || Date.now();
 
     const s = _settings;
+
+    // Nothing that mentions you is ever filtered.
+    //
+    // Someone replying to you is the single most important message in the
+    // channel, and every filter here could swallow it — a short reply, a
+    // repeated one, an all-caps one, a bot answering a command you ran. This
+    // check runs before all of them and short-circuits to the mirror.
+    if (s.chat_neverFilterMentions !== false && _mentionsMe(getMessageText(msgEl))) {
+      if (!msgEl.dataset.ksHidden && window.KS && KS.Mirror) KS.Mirror.ingest(msgEl);
+      return;
+    }
 
     // Kicks notices (filter by amount before other checks)
     if (s.chat_kicksMinAmount > 0 && _isKicksNotice(msgEl)) {
@@ -711,6 +740,8 @@ KS.ChatFilters = (function () {
     // Exposed for unit tests
     _isEmoteOnly,
     filteredCount,
+    setViewer,
+    _mentionsMe,
     _isKicksNotice,
     _getKicksAmount,
     _hasNoUserContent,

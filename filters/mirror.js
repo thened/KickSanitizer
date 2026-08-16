@@ -34,6 +34,19 @@ KS.Mirror = (function () {
   let _bar = null;               // header bar (outside the scroll list)
   let _countEl = null;           // "N filtered" readout in the header
   let _barMode = null;           // 'clean' | 'kick' — bar is rebuilt only on change
+
+  // Theme id → picker label. The id doubles as the body class suffix (ks-<id>),
+  // so a new theme is one entry here plus one block in content.css — nothing
+  // else in this file needs to know the list.
+  const THEMES = [
+    ['normal',     'Normal'],
+    ['clown',      '🤡 Clown'],
+    ['terminal',   '💻 Terminal'],
+    ['amber',      '🟠 CRT Amber'],
+    ['typewriter', '📄 Typewriter'],
+    ['contrast',   '◐ High Contrast'],
+    ['minimal',    '· Minimal'],
+  ];
   let _odoEl = null;             // rolling-digit odometer inside it
   let _isMod = false;            // viewer can moderate (mod controls seen)
   let _noticeDismissed = false;  // moderator chose to stay on clean chat
@@ -329,8 +342,7 @@ KS.Mirror = (function () {
     const theme = document.createElement('select');
     theme.className = 'ks-mirror-select';
     theme.title = 'Chat appearance';
-    for (const [value, text] of [['normal', 'Normal'], ['clown', '🤡 Clown'],
-                                 ['terminal', '💻 Terminal']]) {
+    for (const [value, text] of THEMES) {
       const o = document.createElement('option');
       o.value = value;
       o.textContent = text;
@@ -434,8 +446,18 @@ KS.Mirror = (function () {
   // Only ever styles OUR list — Kick's chat stays untouched in every theme.
   function applyTheme(settings) {
     const t = (settings && settings.chat_theme) || 'normal';
-    document.body.classList.toggle('ks-clown', t === 'clown');
-    document.body.classList.toggle('ks-terminal', t === 'terminal');
+    for (const [id] of THEMES) {
+      if (id !== 'normal') document.body.classList.toggle('ks-' + id, t === id);
+    }
+    // Independent of theme, so it rides along here rather than in a filter:
+    // this hides part of a message, not the message, and the mirror is styled
+    // entirely from CSS.
+    document.body.classList.toggle('ks-hide-level-badges',
+      !settings || settings.chat_hideLevelBadges !== false);
+    document.body.classList.toggle('ks-hide-mod-badges',
+      !!(settings && settings.chat_hideModBadges));
+    document.body.classList.toggle('ks-hide-other-badges',
+      !!(settings && settings.chat_hideOtherBadges));
   }
 
   function _removeBar() {
@@ -629,8 +651,10 @@ KS.Mirror = (function () {
     _isMod = false;
     _noticeDismissed = false;
     document.body.classList.remove('ks-mirror-on');
-    document.body.classList.remove('ks-clown');
-    document.body.classList.remove('ks-terminal');
+    for (const [id] of THEMES) document.body.classList.remove('ks-' + id);
+    document.body.classList.remove('ks-hide-level-badges');
+    document.body.classList.remove('ks-hide-mod-badges');
+    document.body.classList.remove('ks-hide-other-badges');
     if (_host) {
       _host.removeEventListener('scroll', _onScroll);
       if (_origList && _origList.parentElement) {
@@ -653,6 +677,57 @@ KS.Mirror = (function () {
 
   // ── Ingest ─────────────────────────────────────────────────────────────────
 
+  // The row and its [data-index] wrapper only. Per-message suppression has to
+  // live on one of those two; anything higher is the chat panel itself, and
+  // walking further would cost a forced style recalc per ancestor per message —
+  // ingest runs interleaved with our own writes into the mirror, so every
+  // getComputedStyle here is a fresh recalc rather than a cached read.
+  function _isSuppressedByKick(msgEl) {
+    let el = msgEl;
+    for (let depth = 0; el && depth < 2; el = el.parentElement, depth++) {
+      if (el.dataset && el.dataset.ksHidden) return true;   // our own doing, not Kick's
+      let cs;
+      try { cs = getComputedStyle(el); } catch (_) { return false; }
+      if (!cs) return false;
+      if (cs.display === 'none') return true;
+      if (cs.visibility === 'hidden' || cs.visibility === 'collapse') return true;
+      if (parseFloat(cs.opacity) === 0) return true;
+    }
+    return false;
+  }
+
+  // Tag badges on the clone so CSS can hide them by kind without encoding
+  // Kick's nesting. A badge is img → tooltip div → sized div inside a shared
+  // container, and EVERY level of that reserves space, so all of them need the
+  // class — hiding the img alone leaves a full-width flex item behind.
+  //
+  // The climb stops at the first ancestor holding more than one badge: that is
+  // the container, and tagging it would take every badge down together. When a
+  // message has only one badge the container does get tagged, which is right —
+  // it is empty at that point and still carries its own padding.
+  function _tagBadges(clone) {
+    const roots = new Set();
+    clone.querySelectorAll('[data-testid^="identity-badge-"]').forEach(e => roots.add(e));
+    clone.querySelectorAll('img[src*="/chat/badges/"], img[src*="subscriber_badges"]')
+      .forEach(i => roots.add(i.closest('[data-testid^="identity-badge-"]') || i));
+
+    const count = el => [...roots].filter(r => el === r || el.contains(r)).length;
+
+    for (const root of roots) {
+      const testid = root.getAttribute && (root.getAttribute('data-testid') || '');
+      const alt = (root.querySelector && root.querySelector('img[alt]')
+        ? root.querySelector('img[alt]').alt : root.alt) || '';
+      const isMod = /moderator|broadcaster|host/i.test(testid + ' ' + alt);
+      const isLevel = /^level\s/i.test(alt);
+
+      for (let el = root; el && el !== clone; el = el.parentElement) {
+        if (el !== root && count(el) > 1) break;
+        el.classList.add('ks-badge', isMod ? 'ks-badge-mod' : 'ks-badge-other');
+        if (isLevel) el.classList.add('ks-badge-level');
+      }
+    }
+  }
+
   // Called by chatFilters for every message that survived every filter.
   // `msgEl` is the child of [data-index] — the element KS.Sel.chatMessage picks.
   function ingest(msgEl) {
@@ -664,6 +739,20 @@ KS.Mirror = (function () {
     const isMessage = !!msgEl.querySelector('button[data-prevent-expand]')
                    || !!msgEl.querySelector('div[class*="border-l-4"]');
     if (!isMessage) return;
+
+    // Never surface what Kick has chosen not to show.
+    //
+    // Muting is a client-side feature: Kick decides per message whether you see
+    // it. If it drops muted messages before render this is a no-op. If instead
+    // it renders the row and hides it with CSS, the mirror would have cloned it
+    // and put a muted user back on screen — the one thing a chat cleaner must
+    // never do. Checking the rendered result rather than the mechanism covers
+    // both, and any future client-side suppression we do not know about.
+    //
+    // Deliberate-hiding properties only. Size and scroll position are not
+    // consulted: rows live in a virtualiser and are routinely off-screen or
+    // mid-layout, and treating that as hidden would drop real messages.
+    if (_isSuppressedByKick(msgEl)) return;
 
     // Element-identity marking is not enough: the virtualiser destroys and
     // RE-CREATES rows (observed live — reappearing rows gain a
@@ -707,7 +796,7 @@ KS.Mirror = (function () {
       // moderator action, and losing it made the mirror strictly worse than
       // Kick's chat. Clicks are forwarded to the original row (see
       // _forwardClick), which is why it can stay despite being inert itself.
-      if (!hasText && hasIcon && _isReplyControl(b)) continue;
+      if (!hasText && hasIcon && _isReplyControl(b)) { b.classList.add('ks-reply'); continue; }
 
       if (!hasText && hasIcon) {
         // Kick only renders these controls for users who can act on the
@@ -717,6 +806,35 @@ KS.Mirror = (function () {
         b.remove();
       }
     }
+
+    // Lift the reply control out of Kick's toolbar wrapper and hang it directly
+    // off the row, so our CSS places it and none of the wrapper's own layout
+    // (absolute offsets, flex sizing, a hover variable we never set) applies.
+    // The now-empty wrapper goes too — it is a sized flex child, so leaving it
+    // would keep a gap where the stripped mod buttons used to be.
+    const reply = clone.querySelector('.ks-reply');
+    if (reply && reply.parentElement !== clone) {
+      const wrapper = reply.parentElement;
+      clone.appendChild(reply);
+      if (wrapper && !wrapper.children.length && !(wrapper.textContent || '').trim()) {
+        wrapper.remove();
+      }
+    }
+
+    // Drop the emptied mod-actions shells. Stripping the buttons leaves their
+    // containers: one `div[style*="--chatroom-mod-actions-display"]`, and an
+    // absolutely-positioned toolbar still holding its 1px divider bars. Now that
+    // rows are position:relative those anchor to the message and render as stray
+    // lines on hover. Scoped to those two shapes, and only when nothing of
+    // substance is left inside, so no real content can be caught by this.
+    for (const shell of clone.querySelectorAll(
+      'div[style*="--chatroom-mod-actions-display"], div[class*="absolute"]')) {
+      if (shell.querySelector('button, img, svg')) continue;
+      if ((shell.textContent || '').trim()) continue;
+      shell.remove();
+    }
+
+    _tagBadges(clone);
 
     _origins.set(clone, msgEl);
 
@@ -796,8 +914,14 @@ KS.Mirror = (function () {
       const icon = _iconName(cloneBtn);
       const src = _liveOriginal(cloneRow);
       if (!src) return;
+      // Icon-only, matching how the control was identified when cloning.
+      // Matching on icon ALONE picked the wrong button on any message that is
+      // itself a reply: the header of a rendered reply preview carries the same
+      // curved-arrow icon and comes first in the DOM, so the click opened the
+      // thread instead of starting a reply. The preview header has text (the
+      // quoted user and message); the control does not.
       const target = [...src.querySelectorAll('button')]
-        .find(b => _iconName(b) === icon);
+        .find(b => !(b.textContent || '').trim() && _iconName(b) === icon);
       if (!target) return;
       e.preventDefault();
       e.stopPropagation();

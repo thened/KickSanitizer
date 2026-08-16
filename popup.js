@@ -26,6 +26,10 @@
     chat_keepDeletedMessages: false,
     chat_showTimestamps: false,
     chat_restoreFocusAfterCooldown: true,
+    chat_neverFilterMentions: true,
+    chat_hideLevelBadges: true,
+    chat_hideModBadges: false,
+    chat_hideOtherBadges: false,
     chat_kicksMinAmount: 0,
     // NOTE: this duplicates KS.DEFAULT_SETTINGS in storage.js, which popup.html
     // does not load. Keep the two in step — when they drifted, new settings

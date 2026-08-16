@@ -54,6 +54,38 @@
     <input type="checkbox" id="chat-refocus" data-key="chat_restoreFocusAfterCooldown">
   </div>
 
+  <div class="ks-row">
+    <label for="chat-mentions">
+      Never filter messages that mention me
+      <span class="ks-hint">A reply to you is shown even if it would otherwise be filtered</span>
+    </label>
+    <input type="checkbox" id="chat-mentions" data-key="chat_neverFilterMentions">
+  </div>
+
+  <div class="ks-row">
+    <label for="chat-level-badges">
+      Hide level badges
+      <span class="ks-hint">Subscriber and moderator badges are kept</span>
+    </label>
+    <input type="checkbox" id="chat-level-badges" data-key="chat_hideLevelBadges">
+  </div>
+
+  <div class="ks-row">
+    <label for="chat-other-badges">
+      Hide all non-moderator badges
+      <span class="ks-hint">Subscriber, level and the rest</span>
+    </label>
+    <input type="checkbox" id="chat-other-badges" data-key="chat_hideOtherBadges">
+  </div>
+
+  <div class="ks-row">
+    <label for="chat-mod-badges">
+      Hide moderator badges
+      <span class="ks-hint">Also hides broadcaster and host</span>
+    </label>
+    <input type="checkbox" id="chat-mod-badges" data-key="chat_hideModBadges">
+  </div>
+
   <div class="ks-divider"></div>
   <div class="ks-section-title">Duplicate messages</div>
   <div class="ks-row">
@@ -111,6 +143,10 @@
       <option value="normal">Normal</option>
       <option value="clown">🤡 Clown</option>
       <option value="terminal">💻 Terminal</option>
+      <option value="amber">🟠 CRT Amber</option>
+      <option value="typewriter">📄 Typewriter</option>
+      <option value="contrast">◐ High Contrast</option>
+      <option value="minimal">· Minimal</option>
     </select>
   </div>
   <div class="ks-row">

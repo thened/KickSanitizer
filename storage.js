@@ -41,6 +41,17 @@ KS.DEFAULT_SETTINGS = {
   // Kick disables the chat input for a cooldown in slow mode; focus falls to
   // the page and typing then triggers the player hotkeys. Put focus back.
   chat_restoreFocusAfterCooldown: true,
+  // A message that @-mentions you is never filtered, whatever else it trips.
+  // Someone replying to you is the one message you cannot afford to lose.
+  chat_neverFilterMentions: true,
+  // Level badges are pure noise — a number that says how long someone has idled
+  // in the channel. Hidden by default; subscriber and moderator badges stay,
+  // since those change how you read a message.
+  chat_hideLevelBadges: true,
+  // Moderator/broadcaster badges say who can act on a message, so they are
+  // kept by default. Everything else — subscriber, level — is decoration.
+  chat_hideModBadges: false,
+  chat_hideOtherBadges: false,
 
   // ── Page ────────────────────────────────────────────────────────────────────
   // Off by default on purpose: this clicks "I agree" on a channel's chat rules
