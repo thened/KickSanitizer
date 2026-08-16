@@ -130,7 +130,24 @@ KS.Sel = {
     '[class*="kicks-panel"]',
     '[class*="kicks-widget"]',
   ],
+  // Confirmed live 2026-08-16. Both sit in the control row above the chat
+  // input: <div class="flex gap-x-1 lg:w-full lg:gap-x-2">
+  //   button[data-testid="channel-points-button"] > span[data-testid="channel-points-value"]
+  //   button[data-testid="gift-shop-button"]      > span[data-testid="kicks-value"]
+  // Hiding the button takes the icon and the number together; hiding only the
+  // value would leave a bare icon with nothing in it.
+  channelPointsButton: [
+    '[data-testid="channel-points-button"]',
+    '[data-testid="channel-points-value"]',
+  ],
+  kicksBalanceButton: [
+    '[data-testid="gift-shop-button"]',
+    '[data-testid="kicks-value"]',
+  ],
+
   kicksButton: [
+    // The real one, confirmed — the guesses below it never matched anything.
+    'button[data-testid="gift-shop-button"]',
     'button[aria-label*="Kicks"]',
     'button[data-testid*="kicks"]',
     'button[data-kicks]',

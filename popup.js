@@ -42,6 +42,8 @@
     page_autoAcceptChatRules: false,
     page_autoClaimRewards: false,
     page_hideKicks: true,
+    page_hideChannelPoints: false,
+    page_hideKicksBalance: false,
     page_hideTopGifters: true,
     page_hideGiftAnimations: true,
     page_hidePinnedMessages: false,

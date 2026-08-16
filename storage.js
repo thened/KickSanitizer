@@ -52,6 +52,8 @@ KS.DEFAULT_SETTINGS = {
   // clicking things in their account unasked.
   page_autoClaimRewards: false,
   page_hideKicks: true,
+  page_hideChannelPoints: false,      // the points counter above the chat input
+  page_hideKicksBalance: false,       // your Kicks balance / gift shop button
   page_hideTopGifters: true,
   page_hideGiftAnimations: true,
   page_hidePinnedMessages: false,

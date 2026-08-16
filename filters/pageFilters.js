@@ -127,6 +127,16 @@ KS.PageFilters = (function () {
       },
     },
     {
+      key: 'page_hideChannelPoints',
+      reason: 'channel-points',
+      find() { return _dedup(KS.Sel.findAll(KS.Sel.channelPointsButton)); },
+    },
+    {
+      key: 'page_hideKicksBalance',
+      reason: 'kicks-balance',
+      find() { return _dedup(KS.Sel.findAll(KS.Sel.kicksBalanceButton)); },
+    },
+    {
       key: 'page_hideBanNotice',
       reason: 'ban-notice',
       find() {
