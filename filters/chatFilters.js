@@ -63,9 +63,24 @@ KS.ChatFilters = (function () {
 
   // ── Main entry point ───────────────────────────────────────────────────────
 
+  // Kick's own chat is READ-ONLY.
+  //
+  // Filtering in place was the original design, and it cannot work: Kick's list
+  // is virtualised with absolutely-positioned rows, so a hidden message leaves
+  // a hole that nothing can close. Clean chat exists precisely because of that.
+  // Running the filters in Kick's chat as well left it full of gaps, stray
+  // attributes and re-inserted clones — visibly broken, for no benefit.
+  //
+  // So: when clean chat is off we look but do not touch. The filters exist to
+  // decide what gets copied into our list, nothing more.
+  function _mayModifyKickChat() {
+    return !!(_settings && _settings.enabled && _settings.chat_mirrorMode);
+  }
+
   function processMessage(msgEl) {
     if (!msgEl || !_settings) return;
     if (!_settings.enabled) return;
+    if (!_mayModifyKickChat()) return;
     // Kick's per-message mod controls (delete / timeout / ban / pin) are
     // <button class="group ..."> — the same class a message row uses. A message
     // is never a button, so this stops a control being filtered or mirrored as
@@ -502,10 +517,39 @@ KS.ChatFilters = (function () {
 
   // ── Hide / show ────────────────────────────────────────────────────────────
 
+  // Distinct messages the filters rejected. Keyed by message identity, not by
+  // element: the virtualiser re-creates rows, so an element-based tally counts
+  // the same message repeatedly.
+  //
+  // This is deliberately NOT KS.Stats.sessionTotal(), which the header used to
+  // show. That sums every reason including page furniture (Kicks widget,
+  // suggested channels, top gifters) and counts emote strips individually, so
+  // one message with five emotes added five. "N filtered" should mean
+  // N messages you did not have to read.
+  const _filteredKeys = new Set();
+  const _filteredOrder = [];
+
+  function _messageIdentity(el) {
+    const user = getUsername(el) || '';
+    const text = getMessageText(el) || '';
+    const time = (el.querySelector('span.text-neutral')?.textContent || '').trim();
+    return (user || text) ? user + '|' + time + '|' + text.slice(0, 160) : '';
+  }
+
+  function filteredCount() { return _filteredKeys.size; }
+
   function _hide(el, reason) {
     // Count only the not-hidden -> hidden transition; processMessage can be
     // called again for the same element and we do not want to double-count.
-    if (!el.dataset.ksHidden && window.KS && KS.Stats) KS.Stats.count(reason);
+    if (!el.dataset.ksHidden) {
+      if (window.KS && KS.Stats) KS.Stats.count(reason);
+      const key = _messageIdentity(el);
+      if (key && !_filteredKeys.has(key)) {
+        _filteredKeys.add(key);
+        _filteredOrder.push(key);
+        while (_filteredOrder.length > 2000) _filteredKeys.delete(_filteredOrder.shift());
+      }
+    }
     el.dataset.ksHidden = reason;
   }
 
@@ -569,6 +613,8 @@ KS.ChatFilters = (function () {
     document.querySelectorAll('[data-ks-collapsed]').forEach(el => delete el.dataset.ksCollapsed);
     _dupeHistory.clear();
     _copypastaMap.clear();
+    _filteredKeys.clear();
+    _filteredOrder.length = 0;
   }
 
   // ── Scan existing DOM ──────────────────────────────────────────────────────
@@ -611,6 +657,7 @@ KS.ChatFilters = (function () {
   // Re-inserts messages that were deleted by bans/mod actions.
   function handleRemovedNode(node, target, nextSibling) {
     if (!_settings || !_settings.enabled || !_settings.chat_keepDeletedMessages) return;
+    if (!_mayModifyKickChat()) return;   // Kick's chat is read-only
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
     if (node.dataset.ksDeleted) return; // already a clone — prevent loops
 
@@ -658,6 +705,7 @@ KS.ChatFilters = (function () {
     isFollowNotice,
     // Exposed for unit tests
     _isEmoteOnly,
+    filteredCount,
     _isKicksNotice,
     _getKicksAmount,
     _hasNoUserContent,

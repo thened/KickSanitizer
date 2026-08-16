@@ -24,6 +24,7 @@ KS.Mirror = (function () {
   const HARD_MAX = 600;          // ceiling while scrolled up, when pruning is deferred
   const STICK_PX = 60;           // treat "within 60px of bottom" as pinned
   const HEADER_H = 24;           // must match .ks-mirror-header height in content.css
+  const ODO_CELL_EM = 1.15;      // must match .ks-odo-strip > span height
 
   let _settings = null;
   let _host = null;              // our list
@@ -328,10 +329,12 @@ KS.Mirror = (function () {
   function _updateCount() {
     if (!_countEl) return;
     let n = 0;
-    try { n = (KS.Stats && KS.Stats.sessionTotal && KS.Stats.sessionTotal()) || 0; } catch (_) { }
+    // Messages filtered, deduped by identity — not KS.Stats.sessionTotal(),
+    // which also counts page furniture andeach emote strip.
+    try { n = (KS.ChatFilters && KS.ChatFilters.filteredCount) ? KS.ChatFilters.filteredCount() : 0; } catch (_) { }
 
     if (!n) { _countEl.innerHTML = ''; _countEl.title = ''; return; }
-    _countEl.title = 'Messages and page clutter hidden since this tab loaded';
+    _countEl.title = 'Messages filtered out since this tab loaded';
 
     if (!_odoEl || !_odoEl.isConnected) {
       _countEl.innerHTML = '';
@@ -372,7 +375,9 @@ KS.Mirror = (function () {
       const d = Number(s[i]);
       if (strip.dataset.d === String(d)) continue;   // already showing it
       strip.dataset.d = String(d);
-      strip.style.transform = `translateY(${-d}em)`;
+      // Must match .ks-odo-strip > span height in content.css, or the digits
+      // drift out of register as the number climbs.
+      strip.style.transform = `translateY(${-d * ODO_CELL_EM}em)`;
     }
   }
 
