@@ -300,9 +300,22 @@ KS.Mirror = (function () {
       if (_host && _host.contains(el)) continue;          // never our own rows
       if (el.children.length > 3) continue;               // want the small node
       const t = (el.textContent || '').trim();
+      if (t.length > 32) continue;                        // not a message
       if (!/^\d*\s*new messages?$/i.test(t)) continue;
       el.dataset.ksHidden = 'new-messages-indicator';
     }
+  }
+
+  // Kick reveals the pill on hover, and our list sits inside their column, so
+  // hovering a mirrored message puts the pointer over their container too. On
+  // the 2s pass alone it flashed into view every time. Catch it on the hover
+  // that summons it — throttled, since mouseover fires constantly.
+  let _hoverThrottle = 0;
+  function _onColumnHover() {
+    const now = Date.now();
+    if (now - _hoverThrottle < 150) return;
+    _hoverThrottle = now;
+    _hideNewMessagesIndicator();
   }
 
   function _showNewMessagesIndicator() {
@@ -439,6 +452,9 @@ KS.Mirror = (function () {
     } catch (_) { }
 
     _host.addEventListener('scroll', _onScroll, { passive: true });
+    if (_origList.parentElement) {
+      _origList.parentElement.addEventListener('mouseover', _onColumnHover, { passive: true });
+    }
     _host.addEventListener('click', _forwardClick, true);
 
     // Deletions name a message id and nothing else, so the socket is the only
@@ -498,6 +514,9 @@ KS.Mirror = (function () {
     document.body.classList.remove('ks-mirror-on');
     if (_host) {
       _host.removeEventListener('scroll', _onScroll);
+      if (_origList && _origList.parentElement) {
+        _origList.parentElement.removeEventListener('mouseover', _onColumnHover);
+      }
       _host.removeEventListener('click', _forwardClick, true);
       _host.remove();
     }
