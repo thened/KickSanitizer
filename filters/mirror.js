@@ -461,9 +461,32 @@ KS.Mirror = (function () {
     _scrollToBottom();
   }
 
+  // Hand Kick's chat back exactly as we found it.
+  //
+  // Everything we write while clean chat is on lives on their rows, and a
+  // half-cleaned list is what "the Kick chat is broken" looked like: messages
+  // still hidden, emotes still stripped, gift blocks still collapsed. Do not
+  // rely on the settings-change path to tidy up — clear it here, on the way
+  // out, unconditionally.
+  function _restoreKickChat() {
+    const root = (_origList && _origList.isConnected)
+      ? _origList : KS.Sel.find(KS.Sel.chatContainer);
+    if (!root) return;
+
+    root.querySelectorAll('[data-ks-hidden]').forEach(el => delete el.dataset.ksHidden);
+    root.querySelectorAll('[data-ks-emote-hidden]').forEach(el => delete el.dataset.ksEmoteHidden);
+    root.querySelectorAll('[data-ks-collapsed]').forEach(el => delete el.dataset.ksCollapsed);
+    root.querySelectorAll('[data-ks-mirrored]').forEach(el => delete el.dataset.ksMirrored);
+    root.querySelectorAll('[data-ks-seen]').forEach(el => delete el.dataset.ksSeen);
+    // Anything we inserted into their list.
+    root.querySelectorAll('.ks-gift-collapsed, .ks-copypasta-indicator').forEach(el => el.remove());
+    root.querySelectorAll('[data-ks-deleted]').forEach(el => el.remove());
+  }
+
   function _unmount() {
     if (KS.ChatSocket) KS.ChatSocket.disconnect();
     _showNewMessagesIndicator();
+    _restoreKickChat();
     _pendingIds.clear();
     _seenKeys.clear();
     _seenOrder.length = 0;
