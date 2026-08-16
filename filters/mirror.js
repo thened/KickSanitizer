@@ -106,6 +106,34 @@ KS.Mirror = (function () {
     return (Date.now() - hit.t <= ID_TTL_MS) ? hit.id : null;
   }
 
+
+  // Kick labels its icons with data-ds-icon. The reply control uses the curved
+  // back-arrow — the same icon that heads a rendered reply preview
+  // ("ArrowCurveLeft", captured live 2026-08-16). Matched loosely, and by
+  // aria-label too, because this is the one control we deliberately keep and
+  // an icon rename should degrade to "no reply button" rather than "wrong
+  // button forwarded".
+  function _iconName(btn) {
+    const svg = btn.querySelector('svg[data-ds-icon]');
+    return svg ? (svg.dataset.dsIcon || '') : '';
+  }
+
+  function _isReplyControl(btn) {
+    if (/reply/i.test(btn.getAttribute('aria-label') || '')) return true;
+    return /arrowcurve|reply/i.test(_iconName(btn));
+  }
+
+  // The still-rendered original for a mirrored row, by element reference or,
+  // once the virtualiser has recycled it, by identity.
+  function _liveOriginal(cloneRow) {
+    let src = _origins.get(cloneRow);
+    if (!src || !src.isConnected) {
+      src = _findLiveRow(cloneRow);
+      if (src) _origins.set(cloneRow, src);
+    }
+    return src || null;
+  }
+
   // ── Deletions Kick renders in place (moderator view) ───────────────────────
   //
   // For moderators Kick keeps a deleted message on screen, struck through and
@@ -263,6 +291,25 @@ KS.Mirror = (function () {
     btn.textContent = on ? '⇄ Kick chat' : '⇄ Clean chat';
     btn.addEventListener('click', () => _setMirror(!on));
 
+    // Theme picker. Lives in the bar rather than the popup because it is the
+    // sort of thing you flip mid-stream for a laugh, not a setting you go and
+    // configure.
+    const theme = document.createElement('select');
+    theme.className = 'ks-mirror-select';
+    theme.title = 'Chat appearance';
+    for (const [value, text] of [['normal', 'Normal'], ['clown', '🤡 Clown'],
+                                 ['terminal', '💻 Terminal']]) {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = text;
+      if ((_settings.chat_theme || 'normal') === value) o.selected = true;
+      theme.appendChild(o);
+    }
+    theme.addEventListener('change', () => {
+      if (KS.updateSettings) KS.updateSettings({ chat_theme: theme.value });
+      applyTheme(Object.assign({}, _settings, { chat_theme: theme.value }));
+    });
+
     const hide = document.createElement('button');
     hide.className = 'ks-mirror-btn ks-mirror-hide';
     hide.title = 'Hide this bar (re-enable in settings)';
@@ -275,6 +322,7 @@ KS.Mirror = (function () {
 
     _bar.appendChild(label);
     _bar.appendChild(_countEl);
+    _bar.appendChild(theme);
     _bar.appendChild(btn);
     _bar.appendChild(hide);
     _updateCount();
@@ -338,6 +386,13 @@ KS.Mirror = (function () {
   function _showNewMessagesIndicator() {
     document.querySelectorAll('[data-ks-hidden="new-messages-indicator"]')
       .forEach(el => delete el.dataset.ksHidden);
+  }
+
+  // Only ever styles OUR list — Kick's chat stays untouched in every theme.
+  function applyTheme(settings) {
+    const t = (settings && settings.chat_theme) || 'normal';
+    document.body.classList.toggle('ks-clown', t === 'clown');
+    document.body.classList.toggle('ks-terminal', t === 'terminal');
   }
 
   function _removeBar() {
@@ -420,6 +475,7 @@ KS.Mirror = (function () {
   function init(settings) {
     _settings = settings;
     if (isOn()) _mount(); else _unmount();
+    applyTheme(settings);
     renderModeBar();          // the bar exists in both modes
   }
 
@@ -429,6 +485,7 @@ KS.Mirror = (function () {
     const now = isOn();
     if (now && !was) _mount();
     else if (!now && was) _unmount();
+    applyTheme(settings);
     renderModeBar();          // re-label for the new mode, or drop if hidden
   }
 
@@ -529,6 +586,8 @@ KS.Mirror = (function () {
     _isMod = false;
     _noticeDismissed = false;
     document.body.classList.remove('ks-mirror-on');
+    document.body.classList.remove('ks-clown');
+    document.body.classList.remove('ks-terminal');
     if (_host) {
       _host.removeEventListener('scroll', _onScroll);
       if (_origList && _origList.parentElement) {
@@ -600,6 +659,13 @@ KS.Mirror = (function () {
     for (const b of clone.querySelectorAll('button')) {
       const hasText = !!(b.textContent || '').trim();
       const hasIcon = !!b.querySelector('svg');
+
+      // Reply is the one per-message control worth keeping — it is not a
+      // moderator action, and losing it made the mirror strictly worse than
+      // Kick's chat. Clicks are forwarded to the original row (see
+      // _forwardClick), which is why it can stay despite being inert itself.
+      if (!hasText && hasIcon && _isReplyControl(b)) continue;
+
       if (!hasText && hasIcon) {
         // Kick only renders these controls for users who can act on the
         // message, so seeing one means this viewer moderates the channel.
@@ -679,21 +745,29 @@ KS.Mirror = (function () {
     if (!cloneRow) return;
 
     const label = cloneBtn.textContent.trim();
-    if (!label) return;              // icon-only buttons are stripped from clones
+
+    // Icon-only controls that survive cloning (reply) carry no text, so they
+    // are matched to the original by icon name instead.
+    if (!label) {
+      if (!_isReplyControl(cloneBtn)) return;
+      const icon = _iconName(cloneBtn);
+      const src = _liveOriginal(cloneRow);
+      if (!src) return;
+      const target = [...src.querySelectorAll('button')]
+        .find(b => _iconName(b) === icon);
+      if (!target) return;
+      e.preventDefault();
+      e.stopPropagation();
+      target.click();
+      return;
+    }
 
     // Match by LABEL, never by position. Position matching was actively unsafe:
     // clones have their icon-only mod controls removed, so clone index 0 (the
     // username) lined up with original index 0 — a delete/timeout/ban button.
     // Only a text-equality guard stopped it firing, which is also why clicking
     // a username did nothing at all.
-    let original = _origins.get(cloneRow);
-
-    // The virtualiser may have recycled the original away. Fall back to finding
-    // a live row with the same user and text.
-    if (!original || !original.isConnected) {
-      original = _findLiveRow(cloneRow);
-      if (original) _origins.set(cloneRow, original);
-    }
+    const original = _liveOriginal(cloneRow);
     if (!original) return;
 
     const target = [...original.querySelectorAll('button')]
@@ -719,5 +793,5 @@ KS.Mirror = (function () {
     return null;
   }
 
-  return { init, update, destroy, ingest, isOn, renderModeBar, _scrollToBottom };
+  return { init, update, destroy, ingest, isOn, renderModeBar, applyTheme, _scrollToBottom };
 }());

@@ -33,6 +33,7 @@
     // to on) until the user touched the control.
     chat_mirrorMode: true,
     chat_showModeToggle: true,
+    chat_theme: 'normal',
     chat_hideAllEmotes: false,
     chat_hideRepeatedEmotes: false,
     chat_minMessageLength: 0,

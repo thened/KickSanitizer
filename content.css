@@ -496,3 +496,68 @@ body.ks-timestamps [style*="chatroom-timestamps-display"] {
   border-radius: 2px !important;
   white-space: nowrap !important;
 }
+
+/* ── Themes ─────────────────────────────────────────────────────────────────
+   Scoped to #ks-mirror throughout. Kick's own chat is never restyled — it is
+   read-only, and a theme is exactly the sort of thing that would leak. */
+
+.ks-mirror-select {
+  background: rgba(20, 20, 24, .85);
+  color: #b4b4bd;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 6px;
+  padding: 1px 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.ks-mirror-select:hover { color: #fff; border-color: rgba(83, 252, 24, .5); }
+
+/* Clown: Comic Sans and a colour per message. Cycling on nth-child keeps
+   neighbouring messages distinct without randomness, which would reshuffle on
+   every prune. */
+body.ks-clown #ks-mirror,
+body.ks-clown #ks-mirror .ks-mirror-row,
+body.ks-clown #ks-mirror .ks-mirror-row * {
+  font-family: "Comic Sans MS", "Comic Neue", "Chalkboard SE", cursive !important;
+}
+body.ks-clown #ks-mirror .ks-mirror-row:nth-child(6n+1) span.font-normal { color: #ff5f6d !important; }
+body.ks-clown #ks-mirror .ks-mirror-row:nth-child(6n+2) span.font-normal { color: #ffb340 !important; }
+body.ks-clown #ks-mirror .ks-mirror-row:nth-child(6n+3) span.font-normal { color: #ffe14d !important; }
+body.ks-clown #ks-mirror .ks-mirror-row:nth-child(6n+4) span.font-normal { color: #4dff88 !important; }
+body.ks-clown #ks-mirror .ks-mirror-row:nth-child(6n+5) span.font-normal { color: #4dc9ff !important; }
+body.ks-clown #ks-mirror .ks-mirror-row:nth-child(6n)   span.font-normal { color: #d98cff !important; }
+body.ks-clown #ks-mirror .ks-mirror-row:nth-child(2n) { transform: rotate(-.35deg); }
+body.ks-clown #ks-mirror .ks-mirror-row:nth-child(2n+1) { transform: rotate(.35deg); }
+
+/* Terminal: one phosphor colour, monospace, no badges or avatars. Usernames
+   keep their weight but lose Kick's per-user colour, which is the point. */
+body.ks-terminal #ks-mirror {
+  background: #000;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace !important;
+}
+body.ks-terminal #ks-mirror .ks-mirror-row,
+body.ks-terminal #ks-mirror .ks-mirror-row * {
+  font-family: inherit !important;
+  color: #33ff66 !important;
+  text-shadow: 0 0 4px rgba(51, 255, 102, .45);
+  background: transparent !important;
+}
+/* Badges and level pips only. NOT every img/svg — that would take the emotes
+   and the reply control's icon with it, leaving an invisible button. */
+body.ks-terminal #ks-mirror [data-testid^="identity-badge-"],
+body.ks-terminal #ks-mirror .ks-mirror-row img[src*="/chat/badges/"],
+body.ks-terminal #ks-mirror .ks-mirror-row img[src*="subscriber_badges"] {
+  display: none !important;
+}
+
+/* Usernames as <handle>. Scoped to the username button so the reply control
+   does not render as an empty pair of brackets. */
+body.ks-terminal #ks-mirror button[data-prevent-expand] { text-transform: lowercase; }
+body.ks-terminal #ks-mirror button[data-prevent-expand]::before { content: "<"; }
+body.ks-terminal #ks-mirror button[data-prevent-expand]::after { content: ">"; }
+
+/* Emotes survive, desaturated so they sit inside the phosphor palette. */
+body.ks-terminal #ks-mirror span[data-emote-id] img {
+  filter: grayscale(1) sepia(1) hue-rotate(70deg) saturate(3) brightness(.9);
+}

@@ -16,7 +16,8 @@ KS.DEFAULT_SETTINGS = {
   // Kick's virtualised list, so the mirror is the mode the extension is for.
   // Users switch to Kick's own chat from the mode bar (e.g. to moderate).
   chat_mirrorMode: true,              // render surviving messages in our own list
-  chat_showModeToggle: true,          // persistent clean-chat/Kick-chat switch above chat
+  chat_showModeToggle: true,
+  chat_theme: 'normal',               // 'normal' | 'clown' — clean chat only          // persistent clean-chat/Kick-chat switch above chat
   chat_hideAllEmotes: false,          // strip every emote, keep the text
   chat_hideRepeatedEmotes: false,     // keep the first of each emote, drop repeats
   chat_collapseGlobalCopypasta: false,
