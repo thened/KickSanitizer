@@ -33,6 +33,7 @@ KS.Mirror = (function () {
   let _origins = new WeakMap();  // clone -> original row, for click forwarding
   let _bar = null;               // header bar (outside the scroll list)
   let _countEl = null;           // "N filtered" readout in the header
+  let _barMode = null;           // 'clean' | 'kick' — bar is rebuilt only on change
   let _odoEl = null;             // rolling-digit odometer inside it
   let _isMod = false;            // viewer can moderate (mod controls seen)
   let _noticeDismissed = false;  // moderator chose to stay on clean chat
@@ -240,17 +241,38 @@ KS.Mirror = (function () {
   // start below whatever is currently showing.
   function _layout() {
     const parent = _origList && _origList.parentElement;
-    const barH = (_bar && _bar.isConnected) ? HEADER_H : 0;
+
+    // Measured, never assumed. The bar is two rows, its height changes with the
+    // theme row, and Kick's pinned message sits above the chat — an unhidden
+    // pinned post overlapped our header and the top of the list.
+    const barH = (_bar && _bar.isConnected)
+      ? Math.ceil(_bar.getBoundingClientRect().height) : 0;
+
     const note = parent ? parent.querySelector('.ks-mirror-modnotice') : null;
     const noteH = note ? Math.ceil(note.getBoundingClientRect().height) : 0;
 
-    if (note) note.style.top = barH + 'px';
-    if (_host) _host.style.top = (barH + noteH) + 'px';
+    // Anything Kick stacks above the list (pinned message) pushes us down with
+    // it, rather than being covered by us or covering us.
+    let pinnedH = 0;
+    if (parent) {
+      const pinned = parent.querySelector('[data-testid^="pinned-message"]');
+      if (pinned && !pinned.dataset.ksHidden) {
+        const pr = pinned.getBoundingClientRect();
+        const cr = parent.getBoundingClientRect();
+        if (pr.height && pr.bottom > cr.top) {
+          pinnedH = Math.ceil(Math.min(pr.bottom - cr.top, cr.height * 0.6));
+        }
+      }
+    }
+
+    if (_bar) _bar.style.top = pinnedH + 'px';
+    if (note) note.style.top = (pinnedH + barH) + 'px';
+    if (_host) _host.style.top = (pinnedH + barH + noteH) + 'px';
 
     // In Kick-chat mode the bar would sit on top of their list, so shrink the
     // container's content box instead of covering messages. Kick's list is
     // h-full, so padding on the parent gives it the right height for free.
-    if (parent) parent.style.paddingTop = (!isOn() && barH) ? barH + 'px' : '';
+    if (parent) parent.style.paddingTop = (!isOn() && barH) ? (pinnedH + barH) + 'px' : '';
   }
 
   // Persistent mode bar. Present in BOTH modes so the switch is always one
@@ -267,14 +289,24 @@ KS.Mirror = (function () {
       ? _origList : (_origList = KS.Sel.find(KS.Sel.chatContainer));
     if (!list || !list.parentElement) return;
 
+    const on = isOn();
+
     if (!_bar || !_bar.isConnected) {
       _bar = document.createElement('div');
       _bar.className = 'ks-mirror-header';
       list.parentElement.appendChild(_bar);
+      _barMode = null;                        // force a build
     }
-    _bar.innerHTML = '';
 
-    const on = isOn();
+    // Rebuilding wholesale on every watchdog tick tore out the <select> while
+    // it was open, so the theme dropdown could never be used. Only rebuild when
+    // the mode actually changes; otherwise just refresh the number.
+    if (_barMode === (on ? 'clean' : 'kick')) {
+      _updateCount();
+      return;
+    }
+    _barMode = on ? 'clean' : 'kick';
+    _bar.innerHTML = '';
 
     const label = document.createElement('span');
     label.className = 'ks-mirror-label' + (on ? '' : ' ks-off');
@@ -320,14 +352,26 @@ KS.Mirror = (function () {
       _removeBar();
     });
 
-    _bar.appendChild(label);
-    _bar.appendChild(_countEl);
-    _bar.appendChild(theme);
-    _bar.appendChild(btn);
-    _bar.appendChild(hide);
+    // Row 1: what mode you are in, the count, and the way out.
+    const row1 = document.createElement('div');
+    row1.className = 'ks-mirror-row1';
+    row1.appendChild(label);
+    row1.appendChild(_countEl);
+    row1.appendChild(btn);
+    row1.appendChild(hide);
+
+    // Row 2: appearance. On its own line — four controls did not fit a 340px
+    // column, and "Kick chat" was wrapping to two lines inside its own button.
+    const row2 = document.createElement('div');
+    row2.className = 'ks-mirror-row2';
+    row2.appendChild(theme);
+
+    _bar.appendChild(row1);
+    _bar.appendChild(row2);
     _updateCount();
     _layout();
     _hideNewMessagesIndicator();
+    _layout();          // pinned messages appear and vanish on their own
   }
 
   // Kick shows an "N new messages" affordance whenever its list is not scrolled
@@ -397,6 +441,7 @@ KS.Mirror = (function () {
 
   function _removeBar() {
     if (_bar) { _bar.remove(); _bar = null; }
+    _barMode = null;
     _countEl = null;
     _odoEl = null;
     _odoEl = null;
