@@ -227,6 +227,9 @@ Also needed: a 440×280 small promo tile. The 128px icon already exists.
       - `manifest.json` → `name`, `short_name`, `action.default_title`
       - `popup.html` → `<title>`, `.ks-name`, the About `<strong>`, and the
         disclaimer sentence
+      - `icons/icon16|48|128.png` → green tea, not the broom. This is the one
+        asset a reviewer and every user sees first, and it is the easiest part
+        of the rename to forget because nothing breaks without it.
       (`manifest.json` `description` is already the store short description and
       needs no change. The `KS.*` namespace and `ks-` CSS prefixes stay — not
       user-visible.)
