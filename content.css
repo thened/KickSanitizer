@@ -779,3 +779,151 @@ body.ks-fabulous #ks-mirror .ks-mirror-row span.text-neutral {
 body.ks-fabulous #ks-mirror .ks-mirror-row img {
   filter: saturate(1.35) drop-shadow(0 0 3px rgba(255, 120, 220, .5));
 }
+
+/* Synthwave: magenta and cyan on deep violet. The horizon is a gradient pinned
+   to the bottom of the list plus a set of horizontal rules that tighten towards
+   it — a real perspective grid would need transforms on a scrolling container,
+   which is not worth the compositing on a list that repaints constantly.
+   background-attachment:local keeps it fixed to the viewport of the scroller
+   rather than sliding away with the rows. */
+body.ks-synthwave #ks-mirror {
+  background:
+    linear-gradient(transparent 62%, rgba(255, 45, 149, .10) 82%, rgba(0, 231, 255, .16) 100%),
+    repeating-linear-gradient(transparent 0 22px, rgba(0, 231, 255, .05) 22px 23px),
+    #17062b;
+  background-attachment: local, local, local;
+}
+body.ks-synthwave #ks-mirror .ks-mirror-row,
+body.ks-synthwave #ks-mirror .ks-mirror-row * {
+  color: #e8d9ff !important;
+  background: transparent !important;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif !important;
+  letter-spacing: .015em;
+}
+body.ks-synthwave #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  color: #00e7ff !important;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  text-shadow: 0 0 6px rgba(0, 231, 255, .65);
+}
+/* Alternate the neon so the column does not read as one flat colour. */
+body.ks-synthwave #ks-mirror .ks-mirror-row:nth-child(2n) button[data-prevent-expand] {
+  color: #ff2d95 !important;
+  text-shadow: 0 0 6px rgba(255, 45, 149, .65);
+}
+body.ks-synthwave #ks-mirror .ks-mirror-row span.text-neutral {
+  color: #8b6bbf !important;
+}
+body.ks-synthwave #ks-mirror .ks-mirror-row img {
+  filter: saturate(1.2) drop-shadow(0 0 4px rgba(255, 45, 149, .45));
+}
+
+/* Colour-blind safe: the seven Okabe-Ito colours, which stay distinguishable
+   under protanopia, deuteranopia and tritanopia. Kick's own username colours
+   are arbitrary and several collide under all three.
+
+   The slot comes from a hash of the username (Mirror._colourSlot), so a person
+   keeps their colour across reloads and channels. Black is omitted from the
+   palette — it is the eighth Okabe-Ito colour and invisible here. */
+body.ks-colorsafe #ks-mirror .ks-mirror-row,
+body.ks-colorsafe #ks-mirror .ks-mirror-row * {
+  color: #e6e6e6 !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+body.ks-colorsafe #ks-mirror .ks-mirror-row[data-ks-cvd="0"] button[data-prevent-expand] { color: #e69f00 !important; }
+body.ks-colorsafe #ks-mirror .ks-mirror-row[data-ks-cvd="1"] button[data-prevent-expand] { color: #56b4e9 !important; }
+body.ks-colorsafe #ks-mirror .ks-mirror-row[data-ks-cvd="2"] button[data-prevent-expand] { color: #009e73 !important; }
+body.ks-colorsafe #ks-mirror .ks-mirror-row[data-ks-cvd="3"] button[data-prevent-expand] { color: #f0e442 !important; }
+body.ks-colorsafe #ks-mirror .ks-mirror-row[data-ks-cvd="4"] button[data-prevent-expand] { color: #4aa3df !important; }
+body.ks-colorsafe #ks-mirror .ks-mirror-row[data-ks-cvd="5"] button[data-prevent-expand] { color: #d55e00 !important; }
+body.ks-colorsafe #ks-mirror .ks-mirror-row[data-ks-cvd="6"] button[data-prevent-expand] { color: #cc79a7 !important; }
+body.ks-colorsafe #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  font-weight: 700 !important;
+}
+/* Timestamps recede so the only colour carrying meaning is the username. */
+body.ks-colorsafe #ks-mirror .ks-mirror-row span.text-neutral {
+  color: #9a9a9a !important;
+}
+
+/* Gross. Bile green on sick brown, mottled with fixed blobs so the background
+   looks lumpy rather than flat. The blobs are at hardcoded positions rather
+   than random: randomness would need JS, and worse, would reshuffle on every
+   prune. background-attachment:local pins them to the scroller so they do not
+   slide with the rows.
+
+   Papyrus first in the stack entirely on purpose. */
+body.ks-gross #ks-mirror {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(126, 142, 32, .20) 0 18px, transparent 19px),
+    radial-gradient(circle at 71% 34%, rgba(94, 72, 20, .26) 0 26px, transparent 27px),
+    radial-gradient(circle at 33% 58%, rgba(140, 128, 36, .16) 0 14px, transparent 15px),
+    radial-gradient(circle at 84% 77%, rgba(86, 96, 24, .22) 0 22px, transparent 23px),
+    radial-gradient(circle at 8% 88%, rgba(110, 84, 26, .20) 0 16px, transparent 17px),
+    #241f0d;
+  background-attachment: local, local, local, local, local, local;
+}
+body.ks-gross #ks-mirror .ks-mirror-row,
+body.ks-gross #ks-mirror .ks-mirror-row * {
+  font-family: Papyrus, "Comic Sans MS", "Segoe Print", fantasy !important;
+  color: #b3c04a !important;
+  background: transparent !important;
+  text-shadow: 0 1px 0 rgba(52, 66, 12, .8);
+}
+
+/* Five shades of unwell, cycled so neighbouring names differ. */
+body.ks-gross #ks-mirror .ks-mirror-row:nth-child(5n+1) button[data-prevent-expand] { color: #8a9c1c !important; }
+body.ks-gross #ks-mirror .ks-mirror-row:nth-child(5n+2) button[data-prevent-expand] { color: #a8892a !important; }
+body.ks-gross #ks-mirror .ks-mirror-row:nth-child(5n+3) button[data-prevent-expand] { color: #6f7f22 !important; }
+body.ks-gross #ks-mirror .ks-mirror-row:nth-child(5n+4) button[data-prevent-expand] { color: #947024 !important; }
+body.ks-gross #ks-mirror .ks-mirror-row:nth-child(5n)   button[data-prevent-expand] { color: #7e6b1e !important; }
+
+body.ks-gross #ks-mirror .ks-mirror-row span.text-neutral {
+  color: #6a6a34 !important;
+}
+
+/* Emotes turned queasy rather than hidden — they are half the fun here. */
+body.ks-gross #ks-mirror .ks-mirror-row img {
+  filter: sepia(.7) hue-rotate(18deg) saturate(1.6) contrast(1.1);
+}
+
+/* Diablo. Sanctuary's palette: parchment text on near-black stone, with an
+   ember glow banked at the bottom of the list.
+
+   Usernames cycle the item-rarity colours — white common, blue magic, yellow
+   rare, green set, tan unique, orange crafted — which is the one bit of this
+   that is more than a recolour: it reads as loot. */
+body.ks-diablo #ks-mirror {
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(196, 58, 12, .22) 0%, transparent 58%),
+    radial-gradient(ellipse at 50% 0%, rgba(120, 24, 8, .10) 0%, transparent 45%),
+    #0e0806;
+  background-attachment: local, local, local;
+}
+body.ks-diablo #ks-mirror .ks-mirror-row,
+body.ks-diablo #ks-mirror .ks-mirror-row * {
+  font-family: "Palatino Linotype", "Book Antiqua", Georgia,
+               "Times New Roman", serif !important;
+  color: #cbbb96 !important;
+  background: transparent !important;
+  text-shadow: 0 0 6px rgba(0, 0, 0, .9);
+}
+body.ks-diablo #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  font-variant: small-caps;
+  letter-spacing: .05em;
+  font-weight: 700 !important;
+}
+body.ks-diablo #ks-mirror .ks-mirror-row:nth-child(6n+1) button[data-prevent-expand] { color: #ffffff !important; }
+body.ks-diablo #ks-mirror .ks-mirror-row:nth-child(6n+2) button[data-prevent-expand] { color: #6f6fff !important; }
+body.ks-diablo #ks-mirror .ks-mirror-row:nth-child(6n+3) button[data-prevent-expand] { color: #ffff64 !important; }
+body.ks-diablo #ks-mirror .ks-mirror-row:nth-child(6n+4) button[data-prevent-expand] { color: #00c000 !important; }
+body.ks-diablo #ks-mirror .ks-mirror-row:nth-child(6n+5) button[data-prevent-expand] { color: #a08050 !important; }
+body.ks-diablo #ks-mirror .ks-mirror-row:nth-child(6n)   button[data-prevent-expand] { color: #ffa800 !important; }
+
+body.ks-diablo #ks-mirror .ks-mirror-row span.text-neutral {
+  color: #6b5a45 !important;
+}
+body.ks-diablo #ks-mirror .ks-mirror-row img {
+  filter: sepia(.35) saturate(1.15) brightness(.92)
+          drop-shadow(0 0 3px rgba(255, 120, 30, .35));
+}

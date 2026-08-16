@@ -37,18 +37,36 @@ KS.Mirror = (function () {
   let _barMode = null;           // 'clean' | 'kick' — bar is rebuilt only on change
 
   // Theme id → picker label. The id doubles as the body class suffix (ks-<id>),
-  // so a new theme is one entry here plus one block in content.css — nothing
-  // else in this file needs to know the list.
+  // so a new theme is one entry here plus one block in content.css.
+  //
+  // Grouped so the picker stays usable. Flat, this had reached twelve entries in
+  // a narrow select, ordered by nothing but when each was added.
+  //
+  // The split is by intent, not by palette: the first group is for reading chat,
+  // the second is for the look of it. Someone after legibility never has to
+  // scroll past Clown to find High Contrast.
   const THEMES = [
-    ['normal',     'Normal'],
-    ['clown',      '🤡 Clown'],
-    ['terminal',   '💻 Terminal'],
-    ['amber',      '🟠 CRT Amber'],
-    ['typewriter', '📄 Typewriter'],
-    ['contrast',   '◐ High Contrast'],
-    ['minimal',    '· Minimal'],
-    ['fabulous',   '✨ Fabulous'],
+    ['Plain', [
+      ['normal',     'Normal'],
+      ['minimal',    '· Minimal'],
+      ['contrast',   '◐ High Contrast'],
+      ['colorsafe',  '👁 Colour-blind safe'],
+      ['typewriter', '📄 Typewriter'],
+    ]],
+    ['Styled', [
+      ['terminal',   '💻 Terminal'],
+      ['amber',      '🟠 CRT Amber'],
+      ['synthwave',  '🌆 Synthwave'],
+      ['diablo',     '🔥 Diablo'],
+      ['clown',      '🤡 Clown'],
+      ['fabulous',   '✨ Fabulous'],
+      ['gross',      '🤢 Gross'],
+    ]],
   ];
+
+  // Everything outside the picker only ever wants the ids, and derives them
+  // rather than keeping a second list that could fall out of step.
+  const THEME_IDS = THEMES.reduce((all, [, items]) => all.concat(items.map(([id]) => id)), []);
   let _odoEl = null;             // rolling-digit odometer inside it
   let _isMod = false;            // viewer can moderate (mod controls seen)
   let _noticeDismissed = false;  // moderator chose to stay on clean chat
@@ -99,6 +117,28 @@ KS.Mirror = (function () {
     }
     const first = _host.querySelector('.ks-mirror-row');
     if (first) first.before(clone); else _host.appendChild(clone);
+  }
+
+  // Stable colour slot for a username, for the colour-blind-safe theme.
+  //
+  // Kick assigns each user an arbitrary colour, and several of them are
+  // indistinguishable with the common forms of colour vision deficiency. This
+  // maps a name onto one of seven Okabe-Ito colours instead.
+  //
+  // Hashed rather than assigned in arrival order, so a user keeps the same
+  // colour across reloads, channels and sessions — an order-based index would
+  // reshuffle every time the buffer pruned.
+  //
+  // Set on every row regardless of the active theme: computing it only while
+  // the theme is on would leave rows already in the list uncoloured when you
+  // switched to it.
+  const CVD_SLOTS = 7;
+
+  function _colourSlot(username) {
+    const name = String(username || '').toLowerCase();
+    let h = 5381;
+    for (let i = 0; i < name.length; i++) h = ((h * 33) ^ name.charCodeAt(i)) >>> 0;
+    return h % CVD_SLOTS;
   }
 
   function _key(username, text) {
@@ -400,12 +440,17 @@ KS.Mirror = (function () {
     const theme = document.createElement('select');
     theme.className = 'ks-mirror-select';
     theme.title = 'Chat appearance';
-    for (const [value, text] of THEMES) {
-      const o = document.createElement('option');
-      o.value = value;
-      o.textContent = text;
-      if ((_settings.chat_theme || 'normal') === value) o.selected = true;
-      theme.appendChild(o);
+    for (const [groupLabel, items] of THEMES) {
+      const group = document.createElement('optgroup');
+      group.label = groupLabel;
+      for (const [value, text] of items) {
+        const o = document.createElement('option');
+        o.value = value;
+        o.textContent = text;
+        if ((_settings.chat_theme || 'normal') === value) o.selected = true;
+        group.appendChild(o);
+      }
+      theme.appendChild(group);
     }
     theme.addEventListener('change', () => {
       if (KS.updateSettings) KS.updateSettings({ chat_theme: theme.value });
@@ -504,7 +549,7 @@ KS.Mirror = (function () {
   // Only ever styles OUR list — Kick's chat stays untouched in every theme.
   function applyTheme(settings) {
     const t = (settings && settings.chat_theme) || 'normal';
-    for (const [id] of THEMES) {
+    for (const id of THEME_IDS) {
       if (id !== 'normal') document.body.classList.toggle('ks-' + id, t === id);
     }
     // Independent of theme, so it rides along here rather than in a filter:
@@ -713,7 +758,7 @@ KS.Mirror = (function () {
     _isMod = false;
     _noticeDismissed = false;
     document.body.classList.remove('ks-mirror-on');
-    for (const [id] of THEMES) document.body.classList.remove('ks-' + id);
+    for (const id of THEME_IDS) document.body.classList.remove('ks-' + id);
     document.body.classList.remove('ks-hide-level-badges');
     document.body.classList.remove('ks-hide-mod-badges');
     document.body.classList.remove('ks-hide-other-badges');
@@ -1011,7 +1056,10 @@ KS.Mirror = (function () {
     const cf = KS.ChatFilters;
     const username = cf && cf.getUsername ? (cf.getUsername(msgEl) || '') : '';
     const text = cf && cf.getMessageText ? (cf.getMessageText(msgEl) || '') : '';
-    if (username) clone.dataset.ksUser = username;
+    if (username) {
+      clone.dataset.ksUser = username;
+      clone.dataset.ksCvd = String(_colourSlot(username));
+    }
     const id = _takeId(username, text);
     if (id) clone.dataset.ksMsgId = id;
     // Identity, so the original can be re-found after the virtualiser recycles
