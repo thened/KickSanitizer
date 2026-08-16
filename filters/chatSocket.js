@@ -56,7 +56,24 @@ KS.ChatSocket = (function () {
 
   function disconnect() {
     _closing = true;
-    if (_ws) { try { _ws.close(); } catch (_) { } }
+    if (_ws) {
+      // Detach BEFORE closing. onclose fires asynchronously, and by the time it
+      // runs connect() has already cleared _closing for the new connection — so
+      // the dead socket's handler saw a clear flag and scheduled its own
+      // reconnect, on top of the one connect() had opened. Every navigation
+      // leaked another socket: opens ran two ahead of closes and climbed.
+      //
+      // A detached socket also cannot deliver messages from the chatroom you
+      // just left into the channel you moved to.
+      try {
+        _ws.onopen = null;
+        _ws.onmessage = null;
+        _ws.onerror = null;
+        _ws.onclose = null;
+        _ws.close();
+        _closes++;              // counted here, since onclose will not fire
+      } catch (_) { }
+    }
     _ws = null;
     _room = null;
   }

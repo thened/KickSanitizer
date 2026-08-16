@@ -27,6 +27,8 @@
   let _currentChannel = null;
   let _observedChat = null;   // chat container the observer is attached to
   let _navCount = 0;          // teardowns run, for the debug attribute
+  let _lastHref = location.href;   // shared by both navigation detectors
+  const _watchErrors = {};    // step name -> last error, surfaced in ksDebug
 
   // ── Boot ───────────────────────────────────────────────────────────────────
 
@@ -152,53 +154,86 @@
 
   // ── SPA navigation ─────────────────────────────────────────────────────────
 
+  // Navigation is detected three ways, because no single one is reliable here.
+  //
+  // Wrapping history.pushState is the fast path, but it CANNOT be trusted: we
+  // run at document_idle, by which point Kick's bundle has loaded and may hold
+  // its own reference to the original function. Every call through that
+  // reference bypasses the wrapper entirely, and the extension then never
+  // learns the page changed — which is exactly how clean chat stopped surviving
+  // internal navigation.
+  //
+  // So the URL itself is also polled on the watchdog. It is a second or two
+  // slower, but it cannot be bypassed by anything.
   function _watchNavigation() {
-    let lastHref = location.href;
-
-    // Intercept pushState / replaceState
     const wrap = (orig) => function (...args) {
       orig.apply(this, args);
-      if (location.href !== lastHref) {
-        lastHref = location.href;
-        _onNavigate();
-      }
+      _checkHref();
     };
-    history.pushState = wrap(history.pushState);
-    history.replaceState = wrap(history.replaceState);
-    window.addEventListener('popstate', () => {
-      if (location.href !== lastHref) { lastHref = location.href; _onNavigate(); }
-    });
+    try {
+      history.pushState = wrap(history.pushState);
+      history.replaceState = wrap(history.replaceState);
+    } catch (_) { /* the poll still covers us */ }
+
+    window.addEventListener('popstate', _checkHref);
+
+    // The Navigation API sees router-driven changes regardless of who holds a
+    // reference to what. Present in Chrome; absent elsewhere, hence the guard.
+    try {
+      if (window.navigation && window.navigation.addEventListener) {
+        window.navigation.addEventListener('navigate', () => setTimeout(_checkHref, 0));
+      }
+    } catch (_) { }
+  }
+
+  function _checkHref() {
+    if (location.href === _lastHref) return;
+    _lastHref = location.href;
+    _onNavigate();
   }
 
   function _onNavigate() {
     const newChannel = KS.Sel.getCurrentChannel();
+    const channelChanged = newChannel !== _currentChannel;
 
-    // Only a real channel change is a navigation. Kick rewrites the URL for its
-    // own reasons — player state, query params, several times during load — and
-    // every one of those was running the full teardown below: filter state,
-    // mirror, socket and counters all wiped, so the readout kept resetting to
-    // zero and blanking a few seconds after each load.
-    if (newChannel === _currentChannel) return;
+    // Two separate concerns, and conflating them broke this twice.
+    //
+    // RESETTING per-channel state must happen only on a real channel change.
+    // Kick rewrites the URL for its own reasons — player state, query params,
+    // several times during load — and running the teardown on each of those
+    // wiped the filter state, mirror and counters, so the readout kept
+    // restarting while you sat on one channel.
+    //
+    // RE-MOUNTING has to happen on EVERY navigation. Kick re-renders the page
+    // and takes our injected UI with it, so guarding the whole function on a
+    // channel change meant clean chat simply did not come back after moving
+    // around within Kick.
+    if (channelChanged) {
+      _navCount++;
+      _currentChannel = newChannel;
+      KS.ChatFilters.destroy();
+      // Stats are per-channel and the slug is resolved once at load, so counts
+      // would otherwise keep accruing against the channel you started on.
+      if (KS.Stats) { KS.Stats.flush(); KS.Stats.setChannel(newChannel); }
+      // Chatters are per-channel by definition; carrying them across would
+      // report the previous channel's crowd as this one's.
+      if (KS.Chatters) KS.Chatters.reset();
+      // Explicit, and only here: a different channel means a different count.
+      if (KS.ChatFilters.resetCounts) KS.ChatFilters.resetCounts();
+    }
 
-    _navCount++;
-    _currentChannel = newChannel;
-    // Destroy filter state accumulated for previous page
-    KS.ChatFilters.destroy();
-    // Kick is a SPA: without this the mirror kept the previous channel's
-    // messages, its dedupe keys and message-id buffer, and — worst — the chat
-    // socket stayed subscribed to the OLD chatroom, so deletions and bans from
-    // a channel you had left were applied to the one you were reading.
+    // Tear the UI down and rebuild it on EVERY navigation, not just a channel
+    // change. Recovering piecemeal — is the bar still connected, is the readout
+    // still inside it — kept missing cases, because React can replace any
+    // subset of what we injected and each miss looked like a different bug.
+    // Rebuilding is cheap and has one outcome instead of many.
+    //
+    // Safe for the session count: that lives in ChatFilters and is cleared only
+    // by resetCounts() above. Mirror.destroy() also drops the socket, which
+    // must happen on a channel change anyway — it would otherwise stay
+    // subscribed to the chatroom you just left.
     if (KS.Mirror) KS.Mirror.destroy();
-    // Stats are per-channel and the slug is resolved once at load, so counts
-    // would otherwise keep accruing against the channel you started on.
-    if (KS.Stats) { KS.Stats.flush(); KS.Stats.setChannel(newChannel); }
-    // Chatters are per-channel by definition; carrying them across a SPA
-    // navigation would report the previous channel's crowd as this one's.
-    if (KS.Chatters) KS.Chatters.reset();
-    // Explicit, and only here: a different channel means a different count.
-    if (KS.ChatFilters.resetCounts) KS.ChatFilters.resetCounts();
 
-    // Re-load effective settings for the new channel
     KS.getEffectiveSettings(newChannel).then((settings) => {
       _settings = settings;
       KS.ChatFilters.init(_settings);
@@ -206,6 +241,9 @@
       _applyTimestamps(_settings.chat_showTimestamps);
       setTimeout(() => {
         if (KS.Mirror) KS.Mirror.init(_settings);   // remount + resubscribe
+        // The chat container is a new element after a re-render, so the
+        // observer is pointing at a node that no longer receives messages.
+        _startObserver();
         KS.ChatFilters.scanExisting();
         KS.PageFilters.scan(document.body);
         _injectPageButton();
@@ -625,16 +663,33 @@
   let _btnWatch = null;
   function _startButtonWatch() {
     clearInterval(_btnWatch);
+
+    // Each step is isolated. These ran as one block, so the first one to throw
+    // silently skipped everything after it — including _publishDebugState, which
+    // meant the debug attribute went stale and reported a healthy page that no
+    // longer existed. A watchdog whose failures are invisible is worse than no
+    // watchdog, because it is trusted.
+    const steps = [
+      ['button',   () => { const w = document.getElementById('ks-page-wrapper');
+                           if (!w || !w.isConnected) _injectPageButton(); }],
+      // The mode bar and mirror live in Kick's chat column and are destroyed by
+      // the same React re-renders, so they need the same watchdog.
+      ['mount',    () => { if (KS.Mirror && KS.Mirror.ensureMounted) KS.Mirror.ensureMounted(); }],
+      ['bar',      () => { if (KS.Mirror && KS.Mirror.renderModeBar) KS.Mirror.renderModeBar(); }],
+      ['nav',      _checkHref],          // backstop: navigation the wrapper missed
+      ['observer', _ensureChatObserved],
+      ['rules',    _autoAcceptChatRules],
+      ['reward',   _autoClaimReward],
+    ];
+
     _btnWatch = setInterval(() => {
-      const w = document.getElementById('ks-page-wrapper');
-      if (!w || !w.isConnected) _injectPageButton();
-      // The mode bar lives in Kick's chat column and is destroyed by the same
-      // React re-renders, so it needs the same watchdog.
-      if (KS.Mirror && KS.Mirror.renderModeBar) KS.Mirror.renderModeBar();
-      _ensureChatObserved();
-      _autoAcceptChatRules();
-      _autoClaimReward();
-      _publishDebugState();
+      for (const [name, fn] of steps) {
+        try { fn(); }
+        catch (e) { _watchErrors[name] = String((e && e.message) || e); }
+      }
+      // Always last, and outside the loop's failure handling, so the state is
+      // published even when several steps are failing.
+      try { _publishDebugState(); } catch (_) { }
     }, 2000);
   }
 
@@ -664,9 +719,34 @@
         socketMsgs: sock ? sock.seen : null,
         filtered: sock ? sock.filtered : null,
         chatters: chat ? chat.chatters : null,
+        mirrorUp: !!document.getElementById('ks-mirror'),
+        // Geometry, because "mounted" and "visible in the right place" are not
+        // the same thing: the mirror can exist, be correctly populated, and
+        // still be zero-height, pushed off, or sitting under Kick's own list.
+        geom: (() => {
+          const h = document.getElementById('ks-mirror');
+          const b = document.querySelector('.ks-mirror-header');
+          const k = document.querySelector('[data-testid="chatroom-messages"]');
+          const box = el => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return { top: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width) };
+          };
+          return {
+            onClass: document.body.classList.contains('ks-mirror-on'),
+            mirror: box(h),
+            mirrorTopStyle: h ? h.style.top : null,
+            bar: box(b),
+            kick: box(k),
+            kickOpacity: k ? getComputedStyle(k).opacity : null,
+          };
+        })(),
+        barUp: !!document.querySelector('.ks-mirror-header'),
         mirrorRows: document.querySelectorAll('#ks-mirror .ks-mirror-row').length,
         channel: _currentChannel || null,
         navs: _navCount,
+        at: new Date().toLocaleTimeString(),   // so a stale read is obvious
+        errors: Object.keys(_watchErrors).length ? _watchErrors : null,
         sock: (KS.ChatSocket && KS.ChatSocket.stats) ? KS.ChatSocket.stats() : null,
       });
     } catch (_) { /* diagnostics must never break the page */ }

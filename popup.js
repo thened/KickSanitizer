@@ -23,6 +23,7 @@
     chat_collapseGiftedSubs: false,
     chat_hideSubscriptionNotices: false,
     chat_hideFollowNotices: false,
+    chat_hideRedemptions: false,
     chat_keepDeletedMessages: false,
     chat_showTimestamps: false,
     chat_restoreFocusAfterCooldown: true,

@@ -35,6 +35,8 @@ KS.DEFAULT_SETTINGS = {
   chat_collapseGiftedSubs: false,    // collapse to one-line summary instead of hiding
   chat_hideSubscriptionNotices: false,
   chat_hideFollowNotices: false,
+  // Channel-point redemptions ("X has redeemed Y").
+  chat_hideRedemptions: false,
   chat_kicksMinAmount: 0,             // 0 = show all; N = hide Kicks notices where amount < N
   chat_keepDeletedMessages: false,    // re-show messages removed by bans/mod deletions
   chat_showTimestamps: false,         // force Kick's built-in timestamp spans to always show

@@ -154,6 +154,9 @@ KS.ChatFilters = (function () {
     if (s.chat_hideFollowNotices && isFollowNotice(msgEl)) {
       return _hide(msgEl, 'follow-notice');
     }
+    if (s.chat_hideRedemptions && isRedemptionNotice(msgEl)) {
+      return _hide(msgEl, 'redemption');
+    }
 
     const text = getMessageText(msgEl);
     const username = getUsername(msgEl);
@@ -514,6 +517,17 @@ KS.ChatFilters = (function () {
   // Kick does not render follows natively — a chat bot announces them, so the
   // row is an ordinary message and _hasNoUserContent is always false here.
   // Requiring it (as this did) made chat_hideFollowNotices dead code.
+  // Channel-point redemptions. Confirmed markup: a notice card whose icon is
+  // data-ds-icon="Bubbles", with the body reading "<user> has redeemed <reward>".
+  //
+  // Matched on the icon, not the words. "has redeemed" is a translated string
+  // and the reward name is arbitrary user text — the icon is neither, and it is
+  // what makes this card a redemption rather than some other notice.
+  function isRedemptionNotice(msgEl) {
+    if (!_isNoticeCard(msgEl)) return false;
+    return !!msgEl.querySelector('svg[data-ds-icon="Bubbles"]');
+  }
+
   function isFollowNotice(msgEl) {
     if (KS.Sel.matches(msgEl, KS.Sel.followNotice)) return true;
 
@@ -829,6 +843,7 @@ KS.ChatFilters = (function () {
     isGiftedSubNotice,
     isSubscriptionNotice,
     isFollowNotice,
+    isRedemptionNotice,
     // Exposed for unit tests
     _isEmoteOnly,
     filteredCount,

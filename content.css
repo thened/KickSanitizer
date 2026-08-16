@@ -938,3 +938,17 @@ body.ks-diablo #ks-mirror .ks-mirror-row img {
   content: attr(data-ks-viewers);
   font-size: 0.875rem;
 }
+
+/* Stands in for Kick's ban box once that is hidden. Deliberately plain: it says
+   the one thing you need to know and offers nothing to click, which is the
+   whole reason for hiding the unban request in the first place. */
+.ks-banned-notice {
+  margin: 6px 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .05);
+  color: #9a9aa3;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}

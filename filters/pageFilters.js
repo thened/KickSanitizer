@@ -305,6 +305,35 @@ KS.PageFilters = (function () {
     }
   }
 
+  // Hiding Kick's ban box takes the unban-request button with it — which is the
+  // point — but it also removes the only sign that you are banned, so the input
+  // just looks broken. Replace it with one quiet line.
+  //
+  // Detected by the disabled input whose placeholder says "banned", which is the
+  // confirmed marker the ban filter itself already uses.
+  function _applyBanNotice() {
+    const on = !!(_settings && _settings.enabled && _settings.page_hideBanNotice);
+    const existing = document.querySelector('.ks-banned-notice');
+    const bannedInput = document.querySelector('input[placeholder*="banned" i][disabled]');
+
+    if (!on || !bannedInput) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing && existing.isConnected) return;
+
+    // input -> bordered div -> the wrapper the ban filter hides.
+    const wrapper = bannedInput.parentElement && bannedInput.parentElement.parentElement;
+    if (!wrapper || !wrapper.parentElement) return;
+
+    const note = document.createElement('div');
+    note.className = 'ks-banned-notice';
+    note.textContent = '😢 You are banned from this chat';
+    // Beside the hidden box, not inside it — anything inside inherits the
+    // display:none we just applied.
+    wrapper.parentElement.insertBefore(note, wrapper);
+  }
+
   function _hideEl(el, reason) {
     if (!el.dataset.ksHidden) {
       if (window.KS && KS.Stats) KS.Stats.count(reason);
@@ -394,6 +423,7 @@ KS.PageFilters = (function () {
     // one, and that guard only works if the attribute is already there.
     _applyViewerCounts();
     _markLiveBadges(lame);
+    _applyBanNotice();
     if (!settings.enabled) { restoreAll(); return; }
 
     for (const filter of FILTERS) {
@@ -468,6 +498,7 @@ KS.PageFilters = (function () {
     }
     _applyViewerCounts();
     _markLiveBadges(!!_settings.page_liveSaysLame);
+    _applyBanNotice();
     _applyChannelBlocklist(_settings);
   }
 

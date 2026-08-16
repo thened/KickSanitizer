@@ -447,7 +447,15 @@ KS.Mirror = (function () {
     // Rebuilding wholesale on every watchdog tick tore out the <select> while
     // it was open, so the theme dropdown could never be used. Only rebuild when
     // the mode actually changes; otherwise just refresh the number.
-    if (_barMode === (on ? 'clean' : 'kick')) {
+    // The readouts must still be IN the bar, not merely non-null. A React
+    // re-render can replace the bar's contents while leaving the bar itself
+    // connected, and this path then updated detached elements forever: the
+    // counter vanished after navigating between channels and nothing ever
+    // rebuilt it, because as far as this check was concerned the bar was fine.
+    const readoutsLive = _countEl && _countEl.isConnected
+      && (!_chattersEl || _chattersEl.isConnected);
+
+    if (_barMode === (on ? 'clean' : 'kick') && readoutsLive) {
       _updateCount();
       _updateChatters();
       // Overlays come and go on Kick's schedule, not ours — a poll opening
@@ -753,6 +761,41 @@ KS.Mirror = (function () {
   }
 
   function destroy() { _unmount(); }
+
+  // Re-mount if clean chat is on but the list is not in the page.
+  //
+  // _mount() gives up quietly when Kick's chat container is not ready yet, and
+  // after a navigation it frequently is not — the container is rebuilt some
+  // unknown time after the URL changes. The only thing that retried was
+  // ingest(), which needs messages to already be flowing through a live
+  // observer, so if anything upstream was also disrupted nothing ever brought
+  // the mirror back: filters kept running, Kick's own chat showed through with
+  // holes in it, and clean chat was simply gone.
+  //
+  // Called from the 2s watchdog, so recovery does not depend on a single timed
+  // call landing at the right moment.
+  function ensureMounted() {
+    if (!isOn()) return;
+
+    // The bar counts as broken if it is detached OR has collapsed to nothing.
+    // A zero-height bar is not a cosmetic problem: _layout() measures it and
+    // insets the list by that height, so an empty bar puts the messages where
+    // the controls should be and there is nothing on screen to indicate the
+    // extension is running. It also cannot be distinguished from "working" by
+    // any check that only asks whether the element exists.
+    const barBroken = !_bar || !_bar.isConnected
+      || _bar.getBoundingClientRect().height < 4;
+
+    if (_host && _host.isConnected && !barBroken) return;
+
+    // Rebuild both together. Tracking them separately meant each had its own
+    // recovery path and its own way of half-working; there is one outcome this
+    // way.
+    if (barBroken) { _removeBar(); }
+    _mount();
+    if (_host && _host.isConnected) renderModeBar();
+    _layout();
+  }
 
   // ── Mount / unmount ────────────────────────────────────────────────────────
 
@@ -1273,5 +1316,5 @@ KS.Mirror = (function () {
     return null;
   }
 
-  return { init, update, destroy, ingest, isOn, renderModeBar, applyTheme, _scrollToBottom };
+  return { init, update, destroy, ingest, isOn, ensureMounted, renderModeBar, applyTheme, _scrollToBottom };
 }());
