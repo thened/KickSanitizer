@@ -110,13 +110,17 @@ body.ks-mirror-on [data-testid="chatroom-messages"] {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-/* One drum. The gradient is the curve of the wheel: the numeral is brightest
-   at the centre line and falls off towards the housing above and below. */
+/* One cell. The gradient is the curve of a drum face: brightest across the
+   middle, falling off towards the housing. Static — the sliding version is gone,
+   see _setOdometer for why. */
 .ks-odo-digit {
   position: relative;
   width: 0.72em;
   height: 1.15em;
-  overflow: hidden;
+  line-height: 1.15em;
+  text-align: center;
+  color: #eef0f2;
+  font-weight: 600;
   background: linear-gradient(#15161a 0%, #24262c 42%, #24262c 58%, #15161a 100%);
   border-radius: 1px;
 }
@@ -127,24 +131,6 @@ body.ks-mirror-on [data-testid="chatroom-messages"] {
   pointer-events: none;
   background: linear-gradient(rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 34%,
                               rgba(0,0,0,0) 66%, rgba(0,0,0,.55) 100%);
-}
-
-.ks-odo-strip {
-  display: flex;
-  flex-direction: column;
-  will-change: transform;
-  /* Slight overshoot, like a drum settling into its detent. */
-  transition: transform 480ms cubic-bezier(.34, 1.32, .48, 1);
-}
-.ks-odo-strip > span {
-  height: 1.15em;
-  line-height: 1.15em;
-  text-align: center;
-  color: #eef0f2;
-  font-weight: 600;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ks-odo-strip { transition: none; }
 }
 
 .ks-mirror-count {

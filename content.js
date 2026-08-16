@@ -4,7 +4,18 @@
 (function () {
   'use strict';
 
-  // Guard against double-injection
+  // Top frame only.
+  //
+  // Everything this touches — chat, sidebar, player chrome — lives in the top
+  // document, but Kick embeds iframes and a matching one gets its own copy of
+  // the content scripts. Each copy would run its own observers, its own socket
+  // tap and its own counter, all writing to the same chrome.storage: the counter
+  // would advance more than once per message and nothing downstream could tell
+  // why. __kickSanitizerLoaded does not help, since each frame is a separate
+  // global.
+  if (window.top !== window.self) return;
+
+  // Guard against double-injection within this frame.
   if (window.__kickSanitizerLoaded) return;
   window.__kickSanitizerLoaded = true;
 
@@ -15,6 +26,7 @@
   let _mutationFlushPending = false;
   let _currentChannel = null;
   let _observedChat = null;   // chat container the observer is attached to
+  let _navCount = 0;          // teardowns run, for the debug attribute
 
   // ── Boot ───────────────────────────────────────────────────────────────────
 
@@ -160,6 +172,15 @@
 
   function _onNavigate() {
     const newChannel = KS.Sel.getCurrentChannel();
+
+    // Only a real channel change is a navigation. Kick rewrites the URL for its
+    // own reasons — player state, query params, several times during load — and
+    // every one of those was running the full teardown below: filter state,
+    // mirror, socket and counters all wiped, so the readout kept resetting to
+    // zero and blanking a few seconds after each load.
+    if (newChannel === _currentChannel) return;
+
+    _navCount++;
     _currentChannel = newChannel;
     // Destroy filter state accumulated for previous page
     KS.ChatFilters.destroy();
@@ -174,6 +195,8 @@
     // Chatters are per-channel by definition; carrying them across a SPA
     // navigation would report the previous channel's crowd as this one's.
     if (KS.Chatters) KS.Chatters.reset();
+    // Explicit, and only here: a different channel means a different count.
+    if (KS.ChatFilters.resetCounts) KS.ChatFilters.resetCounts();
 
     // Re-load effective settings for the new channel
     KS.getEffectiveSettings(newChannel).then((settings) => {
@@ -611,7 +634,42 @@
       _ensureChatObserved();
       _autoAcceptChatRules();
       _autoClaimReward();
+      _publishDebugState();
     }, 2000);
+  }
+
+  // Publish state to the page world.
+  //
+  // Content scripts live in an isolated world, so window.KS is invisible from
+  // the page console — which makes the extension hard to diagnose from a real
+  // browser session, and impossible for a tester to report on. This mirrors the
+  // few numbers that matter onto an attribute anything can read:
+  //
+  //   document.documentElement.dataset.ksDebug
+  //
+  // One small attribute written every 2s. No PII: counts and flags only.
+  function _publishDebugState() {
+    try {
+      const sock = (KS.ChatFilters && KS.ChatFilters.socketStats)
+        ? KS.ChatFilters.socketStats() : null;
+      const chat = (KS.Chatters && KS.Chatters.stats)
+        ? KS.Chatters.stats((_settings && _settings.chat_chattersWindow) || 15) : null;
+
+      document.documentElement.dataset.ksDebug = JSON.stringify({
+        v: chrome.runtime.getManifest().version,
+        topFrame: window.top === window.self,
+        enabled: !!(_settings && _settings.enabled),
+        cleanChat: !!(_settings && _settings.chat_mirrorMode),
+        socketUp: !!(KS.ChatSocket && KS.ChatSocket.isConnected && KS.ChatSocket.isConnected()),
+        socketMsgs: sock ? sock.seen : null,
+        filtered: sock ? sock.filtered : null,
+        chatters: chat ? chat.chatters : null,
+        mirrorRows: document.querySelectorAll('#ks-mirror .ks-mirror-row').length,
+        channel: _currentChannel || null,
+        navs: _navCount,
+        sock: (KS.ChatSocket && KS.ChatSocket.stats) ? KS.ChatSocket.stats() : null,
+      });
+    } catch (_) { /* diagnostics must never break the page */ }
   }
 
   function _injectPageButton() {

@@ -24,7 +24,6 @@ KS.Mirror = (function () {
   const HARD_MAX = 600;          // ceiling while scrolled up, when pruning is deferred
   const STICK_PX = 60;           // treat "within 60px of bottom" as pinned
   const HEADER_H = 24;           // must match .ks-mirror-header height in content.css
-  const ODO_CELL_EM = 1.15;      // must match .ks-odo-strip > span height
   const ODO_DIGITS = 5;          // fixed width, like a real odometer
 
   let _settings = null;
@@ -34,6 +33,7 @@ KS.Mirror = (function () {
   let _origins = new WeakMap();  // clone -> original row, for click forwarding
   let _bar = null;               // header bar (outside the scroll list)
   let _countEl = null;           // "N filtered" readout in the header
+  let _odoEl = null;             // digit cells inside the count readout
   let _chattersEl = null;        // "N chatters" readout beside the theme picker
   let _chattersTimer = null;
   let _barMode = null;           // 'clean' | 'kick' — bar is rebuilt only on change
@@ -69,7 +69,6 @@ KS.Mirror = (function () {
   // Everything outside the picker only ever wants the ids, and derives them
   // rather than keeping a second list that could fall out of step.
   const THEME_IDS = THEMES.reduce((all, [, items]) => all.concat(items.map(([id]) => id)), []);
-  let _odoEl = null;             // rolling-digit odometer inside it
   let _isMod = false;            // viewer can moderate (mod controls seen)
   let _noticeDismissed = false;  // moderator chose to stay on clean chat
 
@@ -635,11 +634,10 @@ KS.Mirror = (function () {
     clearInterval(_chattersTimer);
     _chattersTimer = null;
     _chattersEl = null;
+    _odoEl = null;
     if (_bar) { _bar.remove(); _bar = null; }
     _barMode = null;
     _countEl = null;
-    _odoEl = null;
-    _odoEl = null;
     _layout();
   }
 
@@ -680,112 +678,55 @@ KS.Mirror = (function () {
   function _updateCount() {
     if (!_countEl) return;
     let n = 0;
-    // Messages filtered, deduped by identity — not KS.Stats.sessionTotal(),
-    // which also counts page furniture andeach emote strip.
+    // Messages filtered, counted from the socket where every message has a
+    // unique id. Deliberately NOT KS.Stats.sessionTotal(), which sums every
+    // reason including page furniture and counts emote strips individually.
     try { n = (KS.ChatFilters && KS.ChatFilters.filteredCount) ? KS.ChatFilters.filteredCount() : 0; } catch (_) { }
 
-    if (!n) { _countEl.innerHTML = ''; _countEl.title = ''; return; }
-    _countEl.title = 'Messages filtered out since this tab loaded';
-
+    // Built once and kept. Rebuilding the readout on every tick is what let a
+    // transient render fault look like the count vanishing.
     if (!_odoEl || !_odoEl.isConnected) {
       _countEl.innerHTML = '';
       _odoEl = document.createElement('span');
       _odoEl.className = 'ks-odo';
       _countEl.appendChild(_odoEl);
     }
+
+    // Always rendered, including zero — it reads 00000 rather than disappearing.
+    // Blanking at zero made "the count is zero" and "the readout is broken"
+    // indistinguishable, which cost several rounds chasing a reset that was
+    // really a blank display.
     _setOdometer(_odoEl, n);
+    _countEl.title = n.toLocaleString() + ' messages filtered since this channel was opened';
   }
 
-  // Car-odometer readout: each digit is a window onto a 0-9 strip that slides.
-  // Only the transform changes per update, so the browser animates it on the
-  // compositor — this ticks on every message, so it must not cause layout.
+  // Fixed-width digits in their own cells.
+  //
+  // Deliberately NOT animated. The sliding version stepped each digit along a
+  // strip of cells, and in a busy chat the digit ticked faster than the slide
+  // could settle: the strip ran past its last cell and the digit rendered
+  // BLANK. A blank odometer reads as the count wiping itself, which is exactly
+  // how it presented. A number that only goes up does not need to prove it is
+  // moving — the digits changing is the animation.
   function _setOdometer(host, value) {
-    // Fixed width with leading zeros. Widens only when the value outgrows it,
-    // so the readout never shifts the layout as it climbs and never silently
-    // truncates a number past 99999.
+    // Fixed width with leading zeros, widening only when the value outgrows it,
+    // so the readout never shifts the layout as it climbs and never truncates.
     const raw = String(value);
     const s = raw.padStart(Math.max(ODO_DIGITS, raw.length), '0');
 
-    // A count should only ever rise. If it somehow falls, rolling every drum
-    // forward to reach a lower number looks like the readout has lost its mind
-    // — which is exactly how the DOM/socket source switch presented before it
-    // was removed. Snap instead, so a regression reads as a jump rather than a
-    // seizure, and stays visible as a bug instead of being dressed up.
-    const prev = Number(host.dataset.value);
-    const curr = Number(value);
-    if (Number.isFinite(prev) && curr < prev) host.innerHTML = '';
-    host.dataset.value = String(curr);
-
-    // Rebuild only when the number of digits changes (9 -> 10, 99 -> 100).
-    //
-    // Each strip carries TWO cycles of 0-9. A real odometer only ever turns one
-    // way, and with a single cycle the 9 -> 0 rollover had to travel back up the
-    // strip, so the drum visibly span backwards on every tenth tick. With a
-    // second cycle below, 9 -> 0 keeps going in the same direction.
     if (host.childElementCount !== s.length) {
       host.innerHTML = '';
       for (let i = 0; i < s.length; i++) {
         const digit = document.createElement('span');
         digit.className = 'ks-odo-digit';
-        const strip = document.createElement('span');
-        strip.className = 'ks-odo-strip';
-        for (let cycle = 0; cycle < 2; cycle++) {
-          for (let d = 0; d <= 9; d++) {
-            const cell = document.createElement('span');
-            cell.textContent = String(d);
-            strip.appendChild(cell);
-          }
-        }
-        strip.dataset.d = '0';
-        strip.dataset.pos = '0';
-        digit.appendChild(strip);
+        digit.textContent = s[i];
         host.appendChild(digit);
       }
+      return;
     }
-
     for (let i = 0; i < s.length; i++) {
-      const strip = host.children[i].firstElementChild;
-      const next = Number(s[i]);
-      const cur = Number(strip.dataset.d);
-      if (cur === next) continue;                    // already showing it
-
-      // Always forwards. 9 -> 0 is a step of one, not a step of minus nine.
-      const delta = (next - cur + 10) % 10;
-      const pos = Number(strip.dataset.pos) + delta;
-      strip.dataset.d = String(next);
-      strip.dataset.pos = String(pos);
-      // Must match .ks-odo-strip > span height in content.css, or the digits
-      // drift out of register as the number climbs.
-      strip.style.transform = `translateY(${-pos * ODO_CELL_EM}em)`;
-      if (pos >= 10) _rewindStrip(strip, pos);
+      if (host.children[i].textContent !== s[i]) host.children[i].textContent = s[i];
     }
-  }
-
-  // Once a strip has travelled into its second cycle, snap it back by exactly
-  // one cycle with the transition off. The cells repeat, so the digit on screen
-  // is identical before and after — nothing moves visibly, and the strip has
-  // room to keep turning the same way forever.
-  //
-  // Deferred until the animation has finished, or it would cut the roll short.
-  // transitionend does not fire under prefers-reduced-motion (there is no
-  // transition), hence the timer as well; whichever arrives first wins.
-  function _rewindStrip(strip, pos) {
-    let done = false;
-    const rewind = () => {
-      if (done) return;
-      done = true;
-      strip.removeEventListener('transitionend', rewind);
-      // A newer update may have moved it on already; leave that one alone.
-      if (Number(strip.dataset.pos) !== pos) return;
-      const back = pos - 10;
-      strip.style.transition = 'none';
-      strip.style.transform = `translateY(${-back * ODO_CELL_EM}em)`;
-      strip.dataset.pos = String(back);
-      void strip.offsetHeight;        // flush, so the next change animates again
-      strip.style.transition = '';
-    };
-    strip.addEventListener('transitionend', rewind);
-    setTimeout(rewind, 700);
   }
 
   function switchToKickChat() { _setMirror(false); }

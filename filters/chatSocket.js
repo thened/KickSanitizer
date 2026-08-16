@@ -28,6 +28,8 @@ KS.ChatSocket = (function () {
   let _room = null;
   let _slug = null;
   let _backoff = 1000;
+  let _opens = 0;
+  let _closes = 0;
   let _closing = false;
   let _handlers = {};
 
@@ -35,9 +37,15 @@ KS.ChatSocket = (function () {
   //             unbanned(username), cleared() }
   function connect(slug, handlers) {
     _handlers = handlers || {};
-    _closing = false;
     if (_slug === slug && _ws && _ws.readyState <= 1) return;   // already on it
     disconnect();
+    // AFTER disconnect(), not before. disconnect() sets _closing = true, and
+    // the room lookup below bails on _closing — so clearing it first meant
+    // disconnect() immediately re-armed the flag and the callback always
+    // returned early. The socket never opened, on any channel, from the day
+    // this was written: no message ids, no deletions, no bans, and once the
+    // filtered count moved onto the socket, nothing to count.
+    _closing = false;
     _slug = slug;
     _resolveRoom(slug).then((room) => {
       if (!room || _closing) return;
@@ -70,7 +78,7 @@ KS.ChatSocket = (function () {
   function _open() {
     try { _ws = new WebSocket(WS_URL); } catch (_) { return; }
 
-    _ws.onopen = () => { _backoff = 1000; };
+    _ws.onopen = () => { _backoff = 1000; _opens++; };
 
     _ws.onmessage = (m) => {
       let f;
@@ -121,6 +129,7 @@ KS.ChatSocket = (function () {
     };
 
     _ws.onclose = () => {
+      _closes++;
       _ws = null;
       if (_closing) return;
       setTimeout(() => { if (!_closing && _room) _open(); }, _backoff);
@@ -134,5 +143,7 @@ KS.ChatSocket = (function () {
     try { if (_ws && _ws.readyState === 1) _ws.send(JSON.stringify(obj)); } catch (_) { }
   }
 
-  return { connect, disconnect, isConnected };
+  function stats() { return { opens: _opens, closes: _closes, room: _room, slug: _slug }; }
+
+  return { connect, disconnect, isConnected, stats };
 }());

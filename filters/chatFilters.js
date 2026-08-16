@@ -655,6 +655,17 @@ KS.ChatFilters = (function () {
   // starts late, so it now shows nothing until the socket is feeding.
   function filteredCount() { return _sockTotal; }
 
+  // Diagnostics for the page-world debug attribute. The isolated world is not
+  // reachable from the page console, so this is how the state gets out.
+  function socketStats() { return { seen: _sockSeen, filtered: _sockTotal }; }
+
+  // The only thing that zeroes the session count.
+  function resetCounts() {
+    _sockCounted.clear();
+    _sockTotal = 0;
+    _sockSeen = 0;
+  }
+
   function _hide(el, reason) {
     // Count only the not-hidden -> hidden transition; processMessage can be
     // called again for the same element and we do not want to double-count.
@@ -724,10 +735,12 @@ KS.ChatFilters = (function () {
     document.querySelectorAll('[data-ks-collapsed]').forEach(el => delete el.dataset.ksCollapsed);
     _dupeHistory.clear();
     _copypastaMap.clear();
-    _sockCounted.clear();
+    // NOT the counters. destroy() runs for reasons that are not a channel
+    // change — re-init, settings churn, anything that calls it in future — and
+    // every one of those was zeroing the session count, which is what kept
+    // making the readout appear to wipe itself. Clearing the count is now an
+    // explicit act: resetCounts(), called only on a genuine channel change.
     _sockDupe.clear();
-    _sockTotal = 0;
-    _sockSeen = 0;
   }
 
   // ── Scan existing DOM ──────────────────────────────────────────────────────
@@ -821,6 +834,8 @@ KS.ChatFilters = (function () {
     filteredCount,
     setViewer,
     countSocketMessage,
+    socketStats,
+    resetCounts,
     _mentionsMe,
     _isKicksNotice,
     _getKicksAmount,
