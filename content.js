@@ -373,6 +373,7 @@
   let _claimDlg = null;
   let _claimCta = null;
   let _claimTimer = null;
+  let _lastClaimAt = 0;   // survives CTA re-renders; element marks do not
 
   function _rewardDialog() {
     for (const dlg of document.querySelectorAll('[role="dialog"]')) {
@@ -392,6 +393,10 @@
 
   function _autoClaimReward() {
     if (!_settings || !_settings.enabled || !_settings.page_autoClaimRewards) {
+      // Give the button back when the mode is turned off, otherwise disabling
+      // the feature would leave the reward permanently invisible.
+      document.querySelectorAll('[data-ks-offstage="reward-cta"]')
+        .forEach(el => delete el.dataset.ksOffstage);
       return;
     }
 
@@ -403,7 +408,8 @@
         if (close) close.click();
         else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       }
-      // Claim went through — now the CTA can go off-stage, and only now.
+      // Claim went through — record it, then take the CTA off-stage.
+      _lastClaimAt = Date.now();
       if (_claimCta && _claimCta.isConnected) _claimCta.dataset.ksOffstage = 'reward-cta';
       _endClaim();
       return;
@@ -424,15 +430,39 @@
       return;
     }
 
-    // Stage 0: find the CTA and open it.
+    // Stage 0.
     //
-    // Deliberately NOT hidden here. Hiding on sight meant that if anything
-    // downstream failed, the user was left with an invisible button they could
-    // not click themselves — the automation breaking would also remove the
-    // manual fallback. It goes off-stage only once a claim has gone through.
+    // Hiding and claiming are separate concerns, and the element stays fully
+    // readable either way — invisible to the eye, unchanged to querySelector.
+    // That is what lets the availability check below work on a button nobody
+    // can see.
+    const ctas = [];
     for (const btn of document.querySelectorAll('button[aria-label]')) {
       if (!/claim.*reward/i.test(btn.getAttribute('aria-label') || '')) continue;
+      // Out of sight whatever its state — claimed, unclaimed, mid-animation.
+      // Unconditional, and before any early return: the cooldown below used to
+      // skip this, so for an hour after each claim the button reappeared.
+      btn.dataset.ksOffstage = 'reward-cta';
+      ctas.push(btn);
+    }
+
+    // Backstop: React re-renders the CTA, and a fresh element carries none of
+    // our marks — so an element-level guard alone re-opened the dialog for an
+    // already-collected reward. Rewards are daily; an hour is plenty.
+    if (Date.now() - _lastClaimAt < 60 * 60 * 1000) return;
+
+    for (const btn of ctas) {
       if (btn.dataset.ksClaimed) return;
+
+      // Kick states availability in the CTA's own artwork:
+      //   .../rewards/reward-available-CTA.webm
+      // Only act when the reward is actually there. Without this we clicked
+      // whatever the button had become and reopened the dialog on a reward
+      // already collected. Read from a hidden element — visibility and
+      // readability are independent.
+      const art = btn.querySelector('video[src]');
+      if (!art || !/reward-available/i.test(art.getAttribute('src') || '')) continue;
+
       btn.dataset.ksClaimed = '1';
       _claimCta = btn;
 

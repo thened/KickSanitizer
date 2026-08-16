@@ -39,7 +39,7 @@
     chat_hideBotGames: false,
     chat_botGameCommands: 'fish,hunt,duel,flag,country,guess,slots,cookie,mine,farm',
     page_autoAcceptChatRules: false,
-    page_autoClaimRewards: false,
+    page_autoClaimRewards: true,
     page_hideKicks: true,
     page_hideTopGifters: true,
     page_hideGiftAnimations: true,
