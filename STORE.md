@@ -26,6 +26,11 @@ the description, so "Kick" appears in the first line of the short description
 and again in the first sentence of the long one. Descriptive use of a brand to
 say what a product works with is permitted; using it as your own name is not.
 
+The name is not applied in the development tree. The extension continues to
+show as "KickSanitizer" in Chrome so people already running it, and the testers
+it is about to go to, are not confused by a rename mid-flight. Matcha Filter is
+applied when the store build is cut — see the checklist in §6.
+
 Worth doing before committing to it: search the Web Store for existing
 extensions called Matcha Filter. A clash is not fatal but is worth knowing about.
 
@@ -216,7 +221,15 @@ Also needed: a 440×280 small promo tile. The 128px icon already exists.
 
 ## 6. Before submitting
 
-- [ ] Rename to Matcha Filter (§1): `manifest.json`, README, repo, icon
+- [ ] Apply the Matcha Filter name (§1). Deliberately NOT applied in the dev
+      tree — the extension stays "KickSanitizer" in Chrome for now so existing
+      users and testers are not confused. Exactly four places to change:
+      - `manifest.json` → `name`, `short_name`, `action.default_title`
+      - `popup.html` → `<title>`, `.ks-name`, the About `<strong>`, and the
+        disclaimer sentence
+      (`manifest.json` `description` is already the store short description and
+      needs no change. The `KS.*` namespace and `ks-` CSS prefixes stay — not
+      user-visible.)
 - [ ] Bump version — `python build.py --bump minor`
 - [ ] `python build.py`, then **load `dist/kicksanitizer-<version>/` unpacked and
       click through it**. Source and package are not the same thing: the popup

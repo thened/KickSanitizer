@@ -5,10 +5,6 @@ came for.
 
 Made by **nedx**. Independent extension, not affiliated with or endorsed by Kick.com.
 
-> Chrome shows this extension as **Matcha Filter** — the name it will be published
-> under. The repository keeps its original name. Same project, both names refer to
-> the same thing.
-
 ## Install
 
 **From a release folder**
