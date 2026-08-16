@@ -70,9 +70,9 @@ channels · recommended streams · pinned messages · polls and predictions · g
 · autoplay overlay · the "you're banned" panel · auto-accept chat rules (off by
 default — it agrees to a channel's rules on your behalf).
 
-**Daily rewards are collected automatically** (on by default). Kick's reward
-button is hidden and the claim happens without a dialog appearing. It only acts
-when a reward is actually available, and turning it off restores the button.
+**Auto-claim daily rewards** (off by default) collects Kick's daily reward for
+you and hides the button — no dialog appears. It only acts when a reward is
+actually available; turning it off restores the button.
 
 ## Settings scope
 

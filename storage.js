@@ -46,10 +46,10 @@ KS.DEFAULT_SETTINGS = {
   // for you. Agreeing to someone's rules is the user's call, not ours.
   page_autoAcceptChatRules: false,
   // Clicks Kick's daily-reward CTA and confirms it, for collectible emotes,
-  // and keeps the button out of sight. On by default — it collects something
-  // free that is already yours, and the alternative is a pulsing button
-  // demanding a click every day. Disclosed in the README and About panel.
-  page_autoClaimRewards: true,
+  // and keeps the button out of sight. Off by default: it acts on the user's
+  // account, and an extension installed to filter chat should not start
+  // clicking things in their account unasked.
+  page_autoClaimRewards: false,
   page_hideKicks: true,
   page_hideTopGifters: true,
   page_hideGiftAnimations: true,
