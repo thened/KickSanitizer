@@ -169,6 +169,23 @@ KS.PageFilters = (function () {
     return arr.filter((el, i, a) => el && a.indexOf(el) === i);
   }
 
+  // Mark the sidebar badges that actually say "LIVE". The same span shows a
+  // viewer count on some entries, so this cannot be a CSS-only match — that
+  // would paint "LAME" over the number. Identified as the span beside the green
+  // dot, which is what the badge is, rather than by a Tailwind class.
+  //
+  // Re-run on every scan: React replaces these nodes when a channel goes live
+  // or offline, which drops the attribute and can also swap LIVE for a count.
+  function _markLiveBadges(on) {
+    const spans = document.querySelectorAll(
+      '[data-testid^="sidebar-"] .bg-green-500 + span');
+    for (const span of spans) {
+      const isLive = on && (span.textContent || '').trim().toUpperCase() === 'LIVE';
+      if (isLive) span.dataset.ksLame = '1';
+      else delete span.dataset.ksLame;
+    }
+  }
+
   function _hideEl(el, reason) {
     if (!el.dataset.ksHidden) {
       if (window.KS && KS.Stats) KS.Stats.count(reason);
@@ -249,6 +266,11 @@ KS.PageFilters = (function () {
 
   function apply(settings) {
     _settings = settings;
+    // Body class rather than a FILTERS entry: this restyles an element, it does
+    // not hide one, so there is nothing to find or restore.
+    const lame = !!(settings.enabled && settings.page_liveSaysLame);
+    document.body.classList.toggle('ks-lame', lame);
+    _markLiveBadges(lame);
     if (!settings.enabled) { restoreAll(); return; }
 
     for (const filter of FILTERS) {
@@ -321,6 +343,7 @@ KS.PageFilters = (function () {
         if (_isSafeToHide(el)) _hideEl(el, filter.reason);
       }
     }
+    _markLiveBadges(!!_settings.page_liveSaysLame);
     _applyChannelBlocklist(_settings);
   }
 

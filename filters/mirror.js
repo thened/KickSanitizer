@@ -25,6 +25,7 @@ KS.Mirror = (function () {
   const STICK_PX = 60;           // treat "within 60px of bottom" as pinned
   const HEADER_H = 24;           // must match .ks-mirror-header height in content.css
   const ODO_CELL_EM = 1.15;      // must match .ks-odo-strip > span height
+  const ODO_DIGITS = 5;          // fixed width, like a real odometer
 
   let _settings = null;
   let _host = null;              // our list
@@ -46,6 +47,7 @@ KS.Mirror = (function () {
     ['typewriter', '📄 Typewriter'],
     ['contrast',   '◐ High Contrast'],
     ['minimal',    '· Minimal'],
+    ['fabulous',   '✨ Fabulous'],
   ];
   let _odoEl = null;             // rolling-digit odometer inside it
   let _isMod = false;            // viewer can moderate (mod controls seen)
@@ -180,6 +182,62 @@ KS.Mirror = (function () {
     if (_settings && _settings.chat_keepDeletedMessages) row.dataset.ksDeleted = 'true';
     else row.remove();
     _updateCount();
+  }
+
+  // ── Masked re-renders ──────────────────────────────────────────────────────
+  //
+  // Kick can re-render a message in place with a word replaced by asterisks
+  // ("... Not Hiroshima" -> "... Not **********"). Same message, new element,
+  // different text — so the username|time|text dedupe key does not match and it
+  // arrived as a second message, leaving both versions stacked in the mirror.
+  //
+  // Same shape as the "(Deleted)" re-render above, and handled the same way:
+  // update the row already there rather than adding another.
+
+  function _isMaskedRender(msgEl) {
+    const cf = KS.ChatFilters;
+    const text = (cf && cf.getMessageText ? cf.getMessageText(msgEl) : '') || '';
+    return /\*{3,}/.test(text);
+  }
+
+  // Matched on the text BEFORE the first run of asterisks. The masked word is
+  // not necessarily the same length as what it replaced, so the two versions
+  // cannot be compared by length or by suffix — but everything ahead of the
+  // mask is untouched.
+  function _maskedPrefix(msgEl) {
+    const cf = KS.ChatFilters;
+    const user = (cf && cf.getUsername ? cf.getUsername(msgEl) : '') || '';
+    const time = (msgEl.querySelector('span.text-neutral')?.textContent || '').trim();
+    const text = ((cf && cf.getMessageText ? cf.getMessageText(msgEl) : '') || '').trim();
+    const head = text.split(/\*{3,}/)[0];
+    return { user, time, head };
+  }
+
+  // Returns true when this was folded into an existing row.
+  function _applyMask(msgEl, clone) {
+    if (!_host) return false;
+    const { user, time, head } = _maskedPrefix(msgEl);
+    // A bare mask with no leading text would match any message from the same
+    // user in the same minute, so refuse rather than risk replacing the wrong
+    // one. It arrives as a normal message instead — a visible duplicate is
+    // better than silently rewriting something else.
+    if (!user || !head.trim()) return false;
+
+    for (const row of _host.querySelectorAll('.ks-mirror-row')) {
+      if ((row.dataset.ksUser || '').toLowerCase() !== user.toLowerCase()) continue;
+      const key = row.dataset.ksKey || '';
+      const parts = key.split('|');
+      if (parts[1] !== time) continue;
+      if (!(parts.slice(2).join('|') || '').startsWith(head)) continue;
+
+      // Swap the content in place so position, ordering and any moderation
+      // identity already attached to the row survive.
+      row.innerHTML = clone.innerHTML;
+      row.dataset.ksKey = _msgKey(msgEl);
+      _origins.set(row, msgEl);
+      return true;
+    }
+    return false;
   }
 
   // ── Moderation, driven by the socket ───────────────────────────────────────
@@ -500,7 +558,11 @@ KS.Mirror = (function () {
   // Only the transform changes per update, so the browser animates it on the
   // compositor — this ticks on every message, so it must not cause layout.
   function _setOdometer(host, value) {
-    const s = String(value);
+    // Fixed width with leading zeros. Widens only when the value outgrows it,
+    // so the readout never shifts the layout as it climbs and never silently
+    // truncates a number past 99999.
+    const raw = String(value);
+    const s = raw.padStart(Math.max(ODO_DIGITS, raw.length), '0');
 
     // Rebuild only when the number of digits changes (9 -> 10, 99 -> 100).
     if (host.childElementCount !== s.length) {
@@ -955,6 +1017,12 @@ KS.Mirror = (function () {
     // Identity, so the original can be re-found after the virtualiser recycles
     // the element we hold a reference to (see _findLiveRow).
     if (dupeKey) clone.dataset.ksKey = dupeKey;
+
+    // A masked re-render of a message already on screen updates that row rather
+    // than becoming a second one. Checked here, after the clone is fully built,
+    // so the row receives the same treatment every other row gets — unique SVG
+    // ids, stripped controls, tagged badges.
+    if (_isMaskedRender(msgEl) && _applyMask(msgEl, clone)) return;
 
     const stick = _stick;
     _insertOrdered(clone, _rowIndex(msgEl));

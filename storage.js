@@ -73,6 +73,11 @@ KS.DEFAULT_SETTINGS = {
   page_hideSuggestedChannels: true,
   page_hideRecommendedStreams: false,
   page_hideAutoplayOverlays: false,
+  // Kick pops a "Congratulations!" modal when someone gifts you a sub. Off by
+  // default like the other automations: it clicks a button for you, even
+  // though that click only dismisses a notice.
+  page_autoDismissGiftDialog: false,
+  page_liveSaysLame: false,            // sidebar "LIVE" badge reads "LAME"
   page_hideSidebar: false,
   page_hideBanNotice: false,     // hides "you are banned" box and unban-request button
 

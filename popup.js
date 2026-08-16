@@ -57,6 +57,8 @@
     page_hideSuggestedChannels: true,
     page_hideRecommendedStreams: false,
     page_hideAutoplayOverlays: false,
+    page_autoDismissGiftDialog: false,
+    page_liveSaysLame: false,
     scope: 'all',
     developerMode: false,
   };

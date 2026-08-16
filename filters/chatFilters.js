@@ -562,6 +562,12 @@ KS.ChatFilters = (function () {
   // N messages you did not have to read.
   const _filteredKeys = new Set();
   const _filteredOrder = [];
+  // The running total is kept separately from the dedupe set. They were the
+  // same thing, and the set is a bounded window — it evicts its oldest key past
+  // 2000 — so the displayed count silently stopped rising at 2000 no matter how
+  // much had actually been filtered. The set answers "have I already counted
+  // this message"; only this answers "how many".
+  let _filteredTotal = 0;
 
   function _messageIdentity(el) {
     const user = getUsername(el) || '';
@@ -570,7 +576,7 @@ KS.ChatFilters = (function () {
     return (user || text) ? user + '|' + time + '|' + text.slice(0, 160) : '';
   }
 
-  function filteredCount() { return _filteredKeys.size; }
+  function filteredCount() { return _filteredTotal; }
 
   function _hide(el, reason) {
     // Count only the not-hidden -> hidden transition; processMessage can be
@@ -581,6 +587,7 @@ KS.ChatFilters = (function () {
       if (key && !_filteredKeys.has(key)) {
         _filteredKeys.add(key);
         _filteredOrder.push(key);
+        _filteredTotal++;
         while (_filteredOrder.length > 2000) _filteredKeys.delete(_filteredOrder.shift());
       }
     }
@@ -649,6 +656,7 @@ KS.ChatFilters = (function () {
     _copypastaMap.clear();
     _filteredKeys.clear();
     _filteredOrder.length = 0;
+    _filteredTotal = 0;
   }
 
   // ── Scan existing DOM ──────────────────────────────────────────────────────

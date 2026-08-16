@@ -701,3 +701,81 @@ body.ks-minimal #ks-mirror button[data-prevent-expand] {
   font-weight: 400 !important;
 }
 body.ks-minimal #ks-mirror span[data-emote-id] { display: none !important; }
+
+/* "LIVE" -> "LAME" in the sidebar.
+   Split between JS and CSS on purpose. _markLiveBadges decides WHICH badges
+   qualify, because the same span shows either "LIVE" or a viewer count and a
+   pure-CSS swap would paint over the number. CSS does the actual replacement,
+   because the sidebar is React-rendered: any textContent we set is reverted on
+   the next re-render, which happens whenever a channel goes live or offline.
+   ::after is invisible to React, so the label stays swapped.
+
+   font-size:0 hides the original without touching textContent, so re-scanning
+   still reads "LIVE" and the mark is idempotent. */
+body.ks-lame [data-ks-lame] {
+  font-size: 0 !important;
+}
+body.ks-lame [data-ks-lame]::after {
+  content: "LAME";
+  font-size: 0.875rem;
+}
+
+/* Fabulous: the text itself is the rainbow, not one flat colour per message —
+   that is what Clown already does. A gradient is painted behind each text run
+   and clipped to the glyphs, so every message sweeps through the spectrum.
+
+   The sweep START is staggered per message with nth-child, so consecutive
+   messages pick up where the last left off and the list reads as one rainbow
+   running down the column. Deliberately NOT animated: the gradient would have
+   to repaint every frame on every visible row, and per-message cost is the one
+   thing that has actually hurt performance in this extension.
+
+   Script faces render small and thin, so the size is nudged up and the weight
+   forced — legibility still matters in a chat window. */
+body.ks-fabulous #ks-mirror {
+  font-size: calc(var(--chatroom-font-size, 13px) + 1px);
+}
+body.ks-fabulous #ks-mirror .ks-mirror-row,
+body.ks-fabulous #ks-mirror .ks-mirror-row * {
+  font-family: "Segoe Script", "Brush Script MT", "Snell Roundhand",
+               "Bradley Hand", "Trebuchet MS", cursive !important;
+  font-weight: 700 !important;
+  font-style: italic;
+  letter-spacing: .01em;
+}
+
+body.ks-fabulous #ks-mirror .ks-mirror-row span.font-normal,
+body.ks-fabulous #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  background-image: linear-gradient(100deg,
+    #ff2d55, #ff9500, #ffd60a, #34c759, #00c7ff, #5e5ce6, #ff2d55);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Six offsets around the gradient, so the hue advances message by message. */
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+1) span.font-normal,
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+1) button[data-prevent-expand] { background-position: 0% 50%; }
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+2) span.font-normal,
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+2) button[data-prevent-expand] { background-position: 20% 50%; }
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+3) span.font-normal,
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+3) button[data-prevent-expand] { background-position: 40% 50%; }
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+4) span.font-normal,
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+4) button[data-prevent-expand] { background-position: 60% 50%; }
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+5) span.font-normal,
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n+5) button[data-prevent-expand] { background-position: 80% 50%; }
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n)   span.font-normal,
+body.ks-fabulous #ks-mirror .ks-mirror-row:nth-child(6n)   button[data-prevent-expand] { background-position: 100% 50%; }
+
+/* Timestamps stay a flat colour — gradient-clipped text at 11px is mush. */
+body.ks-fabulous #ks-mirror .ks-mirror-row span.text-neutral {
+  color: #ff9ad5 !important;
+}
+
+/* Emotes and badges are kept: this is the maximal theme, not a stripped one.
+   A little lift so they sit with the glow rather than looking pasted on. */
+body.ks-fabulous #ks-mirror .ks-mirror-row img {
+  filter: saturate(1.35) drop-shadow(0 0 3px rgba(255, 120, 220, .5));
+}

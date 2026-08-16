@@ -96,6 +96,11 @@
     _pageObserver = new MutationObserver(() => {
       // No node inspection, no queue — just poke the debounced page pass.
       KS.PageFilters.handleAddedNode(document.body);
+      // Not debounced, and not left to the 2s watchdog: a dialog that shows for
+      // two seconds before vanishing is the popup this is meant to prevent. The
+      // settings check comes first so this costs a property read when off, and
+      // one cheap attribute-indexed query per mutation batch when on.
+      if (_settings && _settings.page_autoDismissGiftDialog) _autoDismissGiftDialog();
     });
     _pageObserver.observe(document.body, { childList: true, subtree: true });
   }
@@ -482,6 +487,38 @@
       clearInterval(_claimTimer);
       _claimTimer = setInterval(_autoClaimReward, 100);
       return;
+    }
+  }
+
+  // ── Gifted-sub "Congratulations!" dialog ───────────────────────────────────
+  //
+  // Kick opens a modal when someone gifts you a sub. It cannot simply be hidden:
+  // it is a Radix dialog, so it traps focus and leaves pointer-events:none on
+  // the body — blanking it visually would leave the page dead behind an
+  // invisible modal. It has to be dismissed for real.
+  //
+  // Identified by its link to /transactions/subscriptions rather than by its
+  // heading. "Congratulations!" and "has gifted you a subscription" are
+  // translated strings; the href is not, and matching on the text would quietly
+  // stop working for anyone not reading Kick in English.
+  //
+  // Dismissed via the Cross icon for the same reason — "Back to stream" is
+  // translated, the icon name is not. Both only close the dialog; the sub was
+  // already gifted, so nothing here accepts or declines anything.
+  function _autoDismissGiftDialog() {
+    if (!_settings || !_settings.enabled || !_settings.page_autoDismissGiftDialog) return;
+
+    for (const dlg of document.querySelectorAll('[role="dialog"]')) {
+      if (dlg.dataset.ksDismissed) continue;
+      if (!dlg.querySelector('a[href*="/transactions/subscriptions"]')) continue;
+
+      // Out of sight before the click, so it does not flash while Radix runs
+      // its close animation.
+      dlg.dataset.ksOffstage = 'gift-dialog';
+      dlg.dataset.ksDismissed = '1';
+
+      const close = dlg.querySelector('button:has(svg[data-ds-icon="Cross"])');
+      if (close) close.click();
     }
   }
 
