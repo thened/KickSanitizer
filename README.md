@@ -102,9 +102,8 @@ the current channel and across all channels.
 No build step — plain JS. `python build.py [--bump patch|minor|major]` produces
 an unpacked folder and a store-ready zip from an explicit allowlist of files.
 
-Tests are plain JS with no framework: serve the folder
-(`python -m http.server 7788`) and open `tests/test.html`. 83 tests covering the
-filters, notice detection and selectors against markup captured from live Kick.
+The test harness and DOM capture tools are kept out of this repo — they are
+development-only and never part of a release.
 
 `CLAUDE.md` documents Kick's DOM and socket behaviour — how the virtualiser
 behaves, which selectors are confirmed, what the socket carries. Read it before
