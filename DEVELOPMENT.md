@@ -1,4 +1,4 @@
-# KickSanitizer
+# KickSanitizer — development notes
 
 Chrome MV3 extension that filters Kick.com chat and hides page clutter.
 No build step — plain JS, loaded unpacked.

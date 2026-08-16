@@ -105,7 +105,7 @@ an unpacked folder and a store-ready zip from an explicit allowlist of files.
 The test harness and DOM capture tools are kept out of this repo — they are
 development-only and never part of a release.
 
-`CLAUDE.md` documents Kick's DOM and socket behaviour — how the virtualiser
+`DEVELOPMENT.md` documents Kick's DOM and socket behaviour — how the virtualiser
 behaves, which selectors are confirmed, what the socket carries. Read it before
 changing selectors; several filters have shipped broken because a plausible
 `data-testid` was guessed rather than verified.

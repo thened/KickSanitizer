@@ -20,6 +20,9 @@ tests/
 capture-server.py
 capture-sniffer.js
 
+# Local stub pointing at DEVELOPMENT.md
+CLAUDE.md
+
 # Scratch
 *.b64
 *.log
