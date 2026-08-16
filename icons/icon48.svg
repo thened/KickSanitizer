@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <rect width="48" height="48" rx="9" fill="#0f0f0f"/>
+  <g transform="translate(23,22) rotate(-40)">
+    <rect x="-2.5" y="-19" width="5" height="27" rx="2.5" fill="#53fc18"/>
+    <rect x="-3.5" y="7"   width="7"  height="2.5" rx="1.5" fill="#2e9910"/>
+    <path d="M-11 9.5 Q-12 21 -13 22.5 L13 22.5 Q12 21 11 9.5 Z" fill="#53fc18"/>
+    <line x1="-9"  y1="9.5" x2="-11" y2="22.5" stroke="#2e9910" stroke-width="1"/>
+    <line x1="-3"  y1="9.5" x2="-4"  y2="22.5" stroke="#2e9910" stroke-width="1"/>
+    <line x1="3"   y1="9.5" x2="3.5" y2="22.5" stroke="#2e9910" stroke-width="1"/>
+    <line x1="9"   y1="9.5" x2="10"  y2="22.5" stroke="#2e9910" stroke-width="1"/>
+  </g>
+  <!-- Sparkle -->
+  <path d="M37 10 L38.5 6 L40 10 L44 11.5 L40 13 L38.5 17 L37 13 L33 11.5 Z" fill="white"/>
+  <circle cx="41" cy="18" r="1.2" fill="white" opacity="0.8"/>
+</svg>

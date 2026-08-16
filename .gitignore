@@ -1,0 +1,20 @@
+# Build output
+dist/
+*.zip
+
+# Captured DOM/socket samples contain real usernames, user ids and message text
+# from live channels — third-party personal data. Keep local; anything needed
+# for development is summarised, anonymised, in CLAUDE.md.
+captures/
+
+# Editor / OS
+.claude/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Scratch
+*.b64
+*.log

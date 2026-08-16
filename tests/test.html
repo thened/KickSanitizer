@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KickSanitizer — Test Runner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0d0d10; color: #d4d4d8; font-size: 13px; padding: 24px; }
+    h1 { color: #53fc18; font-size: 18px; margin-bottom: 4px; }
+    .meta { color: #555; font-size: 11px; margin-bottom: 20px; }
+    #summary { display: flex; gap: 14px; margin-bottom: 24px; }
+    .badge { padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+    .badge-pass { background: #14532d; color: #4ade80; }
+    .badge-fail { background: #450a0a; color: #f87171; }
+    .badge-total { background: #1c1c24; color: #a1a1aa; }
+    .suite { margin-bottom: 20px; }
+    .suite-name { color: #a78bfa; font-size: 11px; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: .1em; margin-bottom: 6px; border-bottom: 1px solid #222; padding-bottom: 4px; }
+    .test { display: flex; align-items: flex-start; gap: 8px; padding: 3px 0; }
+    .icon { font-size: 12px; min-width: 16px; }
+    .test-name { flex: 1; color: #d4d4d8; }
+    .test-error { color: #f87171; font-size: 11px; font-family: monospace;
+                  background: #1a0505; padding: 4px 8px; border-radius: 4px;
+                  border-left: 2px solid #f87171; margin-top: 3px; }
+    .log { border-top: 1px solid #222; margin-top: 24px; padding-top: 12px; color: #555; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<h1>KickSanitizer — Test Runner</h1>
+<p class="meta">Plain JS tests, no framework, no build step. Open in a browser tab.</p>
+
+<div id="summary"></div>
+<div id="results"></div>
+<div class="log" id="log"></div>
+
+<!--
+  Load KS scripts in exactly the same order that manifest.json declares them.
+  This gives us the real KS.* globals — no mocks needed for pure-logic tests.
+-->
+<script>
+  // Minimal chrome.storage mock so storage.js doesn't throw outside the extension.
+  window.chrome = window.chrome || {};
+  window.chrome.storage = window.chrome.storage || {
+    sync: {
+      get: (keys, cb) => { cb({}); },
+      set: (obj, cb) => { if (cb) cb(); },
+      remove: (keys, cb) => { if (cb) cb(); },
+    },
+    local: {
+      get: (keys, cb) => { cb({}); },
+      set: (obj, cb) => { if (cb) cb(); },
+      remove: (keys, cb) => { if (cb) cb(); },
+    },
+    onChanged: {
+      addListener: () => {},
+      removeListener: () => {},
+    },
+  };
+  // Stub for runtime messaging (not needed in tests)
+  window.chrome.runtime = window.chrome.runtime || {
+    onMessage: { addListener: () => {} },
+    sendMessage: () => {},
+    lastError: null,
+  };
+  window.chrome.tabs = window.chrome.tabs || {
+    query: (q, cb) => { cb([]); },
+    sendMessage: () => {},
+  };
+</script>
+
+<!-- Load KS modules in manifest order -->
+<script src="../storage.js"></script>
+<script src="../stats.js"></script>
+<script src="../utils/kickSelectors.js"></script>
+<script src="../utils/messageNormalization.js"></script>
+<script src="../filters/chatFilters.js"></script>
+<script src="../filters/chatSocket.js"></script>
+<script src="../filters/mirror.js"></script>
+<script src="../filters/pageFilters.js"></script>
+
+<script>
+  // Expose _isEmoteOnly for testing (it's private inside the IIFE)
+  // We expose it by re-calling init with a dummy settings object so internal
+  // state is ready, then patching the function via a test hook if available.
+  if (window.KS && window.KS.ChatFilters) {
+    const dummySettings = Object.assign({}, window.KS.DEFAULT_SETTINGS);
+    window.KS.ChatFilters.init(dummySettings);
+    // Re-export for tests — chatFilters.js should expose _isEmoteOnly
+    // on the public object when running in test mode (window.KS_TEST_MODE).
+    window.KS_TEST_MODE = true;
+  }
+</script>
+
+<!-- Real markup captured from live Kick.com — see fixtures/notices.js header -->
+<script src="fixtures/notices.js"></script>
+
+<script src="test.js"></script>
+
+<script>
+  // Render results
+  const all = window.KS_TESTS.run();
+  const { pass, fail, total } = window.KS_TESTS.summary();
+
+  document.getElementById('summary').innerHTML = `
+    <span class="badge badge-total">${total} tests</span>
+    <span class="badge badge-pass">✓ ${pass} passed</span>
+    ${fail ? `<span class="badge badge-fail">✗ ${fail} failed</span>` : ''}
+  `;
+
+  // Group by suite
+  const suites = {};
+  for (const r of all) {
+    (suites[r.suite] = suites[r.suite] || []).push(r);
+  }
+
+  const container = document.getElementById('results');
+  for (const [suiteName, tests] of Object.entries(suites)) {
+    const div = document.createElement('div');
+    div.className = 'suite';
+    let html = `<div class="suite-name">${suiteName}</div>`;
+    for (const t of tests) {
+      html += `<div class="test">
+        <span class="icon">${t.ok ? '✓' : '✗'}</span>
+        <div>
+          <span class="test-name" style="color:${t.ok ? '#d4d4d8' : '#f87171'}">${t.name}</span>
+          ${t.ok ? '' : `<div class="test-error">${t.error || ''}</div>`}
+        </div>
+      </div>`;
+    }
+    div.innerHTML = html;
+    container.appendChild(div);
+  }
+
+  document.getElementById('log').textContent =
+    `Completed ${total} tests — ${pass} passed, ${fail} failed.`;
+</script>
+
+</body>
+</html>

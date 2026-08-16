@@ -1,0 +1,55 @@
+{
+  "manifest_version": 3,
+  "name": "KickSanitizer",
+  "short_name": "KickSanitizer",
+  "version": "1.0",
+  "description": "Clean up Kick. Keep what you came for.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.kick.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "KickSanitizer"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.kick.com/*"
+      ],
+      "exclude_matches": [
+        "*://dashboard.kick.com/*"
+      ],
+      "js": [
+        "utils/kickSelectors.js",
+        "utils/messageNormalization.js",
+        "storage.js",
+        "stats.js",
+        "filters/chatFilters.js",
+        "filters/chatSocket.js",
+        "filters/mirror.js",
+        "filters/pageFilters.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,424 @@
+/* KickSanitizer — injected page styles */
+
+/* ── Core hide/show ─────────────────────────────────────────────────────────── */
+[data-ks-hidden] {
+  display: none !important;
+  /* NOTE: this does NOT close the gap in Kick's chat. Verified 2026-08-16:
+     every row is <div data-index="N" class="absolute inset-x-0 top-0"
+     style="transform: translateY(2070px)"> — the virtualiser positions each row
+     absolutely at a precomputed offset. display:none empties the row but the
+     next row keeps its own translateY, so a hidden message leaves a hole
+     exactly its own height. Kick re-measures only on its own schedule; we
+     cannot force a reflow from here. Uneven spacing between visible messages
+     is therefore expected whenever anything is hidden. */
+}
+
+/* ── Mirror ("clean chat") mode ─────────────────────────────────────────────
+   Kick's list is virtualised with absolutely-positioned rows, so hidden
+   messages leave holes that cannot be closed (verified: display:none on row,
+   on parent, and zero-height box all leave following rows at dy = 0). In mirror
+   mode we hide their list entirely and render survivors in normal flow. */
+/* Kick's list must keep its layout box: the virtualiser decides how many rows
+   to render from the scroll container's clientHeight, and display:none makes
+   that 0 — it then renders nothing and there is nothing left to clone. So keep
+   it laid out and rendering, and simply cover it with our own opaque list. */
+body.ks-mirror-on [data-testid="chatroom-messages"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+#ks-mirror {
+  position: absolute;
+  /* Top inset leaves room for .ks-mirror-header so rows are not hidden under it. */
+  inset: 24px 0 0 0;
+  /* Deliberately NO z-index. The list underneath is at opacity:0 and we come
+     later in DOM order, so we already paint above it. Giving this a stacking
+     value put it over Kick's own chat settings overlay. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--chatroom-message-spacing, 2px);
+  font-size: var(--chatroom-font-size, 13px);
+}
+
+/* Switch back to Kick's chat. Sits outside the scrolling list so it neither
+   scrolls away nor gets swept up by the row pruner. */
+/* Header identifying the list as ours, not Kick's. Lives outside the scrolling
+   list so it neither scrolls away nor gets swept up by the row pruner.
+   No z-index — it is a later sibling than #ks-mirror, so it paints above the
+   rows without competing with Kick's own overlays. */
+.ks-mirror-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: rgba(83, 252, 24, 0.07);
+  border-bottom: 1px solid rgba(83, 252, 24, 0.22);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.ks-mirror-label {
+  color: #53fc18;
+  font-weight: 700;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+/* Kick-chat mode: same bar, muted, so it reads as "not filtering right now". */
+.ks-mirror-label.ks-off { color: #9a9aa3; }
+
+.ks-mirror-hide {
+  padding: 1px 6px;
+  line-height: 1;
+  font-size: 13px;
+  opacity: .6;
+}
+.ks-mirror-hide:hover { opacity: 1; }
+.ks-mirror-dot { font-size: 10px; }
+
+.ks-mirror-count {
+  color: #8a8a93;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ks-mirror-btn {
+  background: rgba(20, 20, 24, 0.85);
+  color: #b4b4bd;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.ks-mirror-btn:hover { color: #fff; border-color: rgba(83, 252, 24, 0.5); }
+.ks-mirror-btn.ks-primary { color: #53fc18; border-color: rgba(83, 252, 24, 0.45); }
+
+/* Shown once to viewers who can moderate: clones carry no React handlers, so
+   delete/timeout/ban/pin cannot work on a mirrored message. */
+.ks-mirror-modnotice {
+  /* Overlaid above the list rather than scrolling inside it — as the list's
+     first child, autoscroll pushed it out of view on the first new message and
+     a moderator never saw the warning. mirror.js sets `top` and shifts the
+     list down by this element's height. */
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  border-left: 3px solid rgb(255, 196, 102);
+  background: rgba(255, 196, 102, 0.08);
+  color: #d8d8de;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.ks-mirror-modnotice span { flex: 1 1 100%; }
+
+/* Rows are clones of Kick's own markup, so they bring their own styling.
+   Only the absolute positioning has to be undone. */
+#ks-mirror .ks-mirror-row {
+  position: static !important;
+  transform: none !important;
+  inset: auto !important;
+  width: 100%;
+}
+
+/* Individual emotes hidden inside an otherwise visible message.
+   Separate attribute from [data-ks-hidden] so restoring one does not disturb
+   the other, and so a stripped message still shows its text. */
+[data-ks-emote-hidden] {
+  display: none !important;
+}
+
+/* ── Copypasta collapsed indicator ─────────────────────────────────────────── */
+.ks-copypasta-indicator {
+  display: block;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #888;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  font-family: inherit;
+}
+.ks-copypasta-indicator:hover {
+  opacity: 1;
+  color: #aaa;
+}
+
+/* ── In-page KS button wrapper ──────────────────────────────────────────────── */
+#ks-page-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0 4px;
+  /* Sits in a tight flex row next to Kick's own controls — never let it be
+     squeezed to nothing or clipped by a width-constrained parent. */
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+
+#ks-page-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  /* Sits in Kick's chat control row, where every native button is a bare icon.
+     A filled + bordered box read as bolted-on, so stay transparent at rest and
+     tint only on hover. Revert to background rgba(83,252,24,.12) + 1px border
+     rgba(83,252,24,.35) if the branded look is preferred. */
+  background: transparent;
+  border: 1px solid transparent;
+  color: #53fc18;
+  opacity: 0.75;
+  cursor: pointer;
+  font-size: 15px;
+  flex-shrink: 0;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+  line-height: 1;
+}
+#ks-page-btn:hover {
+  background: rgba(83, 252, 24, 0.18);
+  border-color: rgba(83, 252, 24, 0.45);
+  opacity: 1;
+}
+#ks-page-btn.ks-disabled {
+  opacity: 0.4;
+}
+
+/* ── In-page compact panel ──────────────────────────────────────────────────── */
+#ks-page-panel {
+  /* Fixed, not absolute: the broom sits in Kick's chat footer, which is
+     overflow:hidden, so an absolutely positioned panel is clipped by it.
+     Coordinates are set by _positionPanel() from the button's rect. */
+  position: fixed;
+  left: 0;
+  top: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+  width: 230px;
+  background: #141414;
+  border: 1px solid rgba(83, 252, 24, 0.3);
+  border-radius: 10px;
+  padding: 12px 14px;
+  z-index: 2147483647;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  font-size: 12px;
+  color: #e4e4e4;
+  display: none;
+  box-sizing: border-box;
+}
+#ks-page-panel.ks-open {
+  display: block;
+}
+.ks-panel-header {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #53fc18;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ks-panel-header span {
+  opacity: 0.5;
+  font-weight: 400;
+  font-size: 9px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ks-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 8px;
+}
+.ks-panel-row:last-of-type {
+  border-bottom: none;
+}
+.ks-panel-row label {
+  cursor: pointer;
+  flex: 1;
+  line-height: 1.3;
+}
+.ks-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ks-action-btn {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: center;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+.ks-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.ks-action-btn.ks-primary {
+  background: rgba(83, 252, 24, 0.12);
+  border-color: rgba(83, 252, 24, 0.3);
+  color: #53fc18;
+}
+.ks-action-btn.ks-primary:hover {
+  background: rgba(83, 252, 24, 0.22);
+}
+
+/* ── Toggle switch ──────────────────────────────────────────────────────────── */
+.ks-toggle {
+  flex-shrink: 0;
+  width: 34px;
+  height: 19px;
+  border-radius: 10px;
+  background: #333;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: none;
+  outline: none;
+  padding: 0;
+}
+.ks-toggle.ks-on {
+  background: #53fc18;
+}
+.ks-toggle::after {
+  content: '';
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: left 0.2s;
+}
+.ks-toggle.ks-on::after {
+  left: 17px;
+}
+
+/* ── Timestamps (forced visible) ────────────────────────────────────────────── */
+/* Kick hides timestamps via --chatroom-timestamps-display: none.
+   Adding .ks-timestamps to body overrides the variable with !important,
+   which beats inline styles in Chrome. */
+body.ks-timestamps [style*="chatroom-timestamps-display"] {
+  display: inline !important;
+}
+
+/* ── Preserved deleted messages ─────────────────────────────────────────────── */
+[data-ks-deleted] {
+  opacity: 0.55;
+  background: rgba(255, 60, 60, 0.07) !important;
+  border-left: 2px solid rgba(255, 80, 80, 0.4);
+  pointer-events: none;
+}
+.ks-deleted-label {
+  font-size: 10px;
+  color: rgba(255, 130, 130, 0.85);
+  font-weight: 700;
+  font-family: monospace;
+  margin-right: 4px;
+}
+
+/* ── Collapsed gift batch indicator ────────────────────────────────────────── */
+.ks-gift-collapsed {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: rgba(192, 112, 255, 0.9);
+  border-left: 3px solid rgba(192, 112, 255, 0.4);
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.ks-gift-collapsed:hover {
+  opacity: 1;
+  border-left-color: rgba(192, 112, 255, 0.8);
+}
+
+/* ── Suggested channel dislike button ──────────────────────────────────────── */
+.ks-dislike-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 10;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ccc;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ks-dislike-btn:hover {
+  background: rgba(255, 80, 80, 0.85);
+  color: #fff;
+}
+/* Show on parent hover — parent needs position:relative (set by JS) */
+:where([data-testid^="sidebar-recommended-channel-"], [data-suggested-channels]):hover .ks-dislike-btn,
+*:hover > .ks-dislike-btn {
+  display: flex;
+}
+
+/* ── Debug outlines mode ────────────────────────────────────────────────────── */
+.ks-debug-outline {
+  outline: 2px solid #53fc18 !important;
+  outline-offset: 1px !important;
+  position: relative !important;
+}
+.ks-debug-label {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  background: #53fc18 !important;
+  color: #000 !important;
+  font-size: 9px !important;
+  font-family: monospace !important;
+  padding: 1px 4px !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+  border-radius: 2px !important;
+  white-space: nowrap !important;
+}

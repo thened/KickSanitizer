@@ -1,0 +1,364 @@
+/* KickSanitizer popup styles */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green: #53fc18;
+  --green-dim: rgba(83, 252, 24, 0.18);
+  --green-border: rgba(83, 252, 24, 0.35);
+  --bg: #111113;
+  --surface: #1a1a1e;
+  --surface2: #222226;
+  --border: rgba(255,255,255,0.07);
+  --text: #e4e4e4;
+  --text-muted: #888;
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+}
+
+html, body {
+  width: 340px;
+  max-height: 560px;
+  overflow-x: hidden;
+  font-family: var(--font);
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+.ks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.ks-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.ks-logo {
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.ks-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.ks-tagline {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* Master toggle pill */
+.ks-master-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+.ks-master-toggle input { display: none; }
+.ks-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: #333;
+  color: #666;
+  transition: background 0.2s, color 0.2s;
+  cursor: pointer;
+}
+.ks-master-toggle input:checked + .ks-pill {
+  background: var(--green);
+  color: #000;
+}
+
+/* ── Channel bar ───────────────────────────────────────────────────────── */
+.ks-channel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: var(--green-dim);
+  border-bottom: 1px solid var(--green-border);
+  font-size: 11px;
+}
+.ks-channel-label { color: #b8f59e; }
+.ks-link-btn {
+  background: none;
+  border: none;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 11px;
+  text-decoration: underline;
+  font-family: var(--font);
+  padding: 0;
+}
+.ks-link-btn:hover { opacity: 0.8; }
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+.ks-tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 56px;
+  z-index: 9;
+}
+.ks-tab {
+  flex: 1;
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font);
+  transition: color 0.15s, border-color 0.15s;
+}
+.ks-tab:hover { color: var(--text); }
+.ks-tab.active {
+  color: var(--green);
+  border-bottom-color: var(--green);
+  font-weight: 600;
+}
+
+/* ── Tab content ───────────────────────────────────────────────────────── */
+.ks-tab-content {
+  display: none;
+  padding: 12px 14px;
+  overflow-y: auto;
+  max-height: 396px;
+}
+.ks-tab-content.active { display: block; }
+
+/* ── Section title ─────────────────────────────────────────────────────── */
+.ks-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+/* ── About ─────────────────────────────────────────────────────────────────── */
+.ks-about { font-size: 11px; color: #b4b4bd; }
+.ks-about-line { padding: 1px 0; }
+.ks-about-line strong { color: #e4e4e4; }
+#about-version { color: #53fc18; font-variant-numeric: tabular-nums; }
+.ks-about-note { color: #7a7a85; line-height: 1.5; margin-top: 6px; }
+
+/* ── Stats ─────────────────────────────────────────────────────────────────── */
+.ks-stats { font-size: 11px; }
+.ks-stats-scope {
+  color: #7a7a85; text-transform: uppercase; letter-spacing: .08em;
+  font-size: 9px; margin: 6px 0 3px;
+}
+.ks-stats-row { display: flex; justify-content: space-between; padding: 2px 0; }
+.ks-stats-row span:first-child { color: #b4b4bd; }
+.ks-stats-row span:last-child { color: #53fc18; font-variant-numeric: tabular-nums; }
+.ks-stats-total { border-top: 1px solid #2a2a32; margin-top: 4px; padding-top: 4px; font-weight: 700; }
+.ks-stats-empty { color: #6a6a75; padding: 4px 0; }
+
+.ks-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
+}
+
+/* ── Row ───────────────────────────────────────────────────────────────── */
+.ks-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  gap: 10px;
+}
+.ks-row label {
+  flex: 1;
+  cursor: pointer;
+  line-height: 1.4;
+  color: var(--text);
+}
+.ks-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* ── Checkbox (styled) ─────────────────────────────────────────────────── */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #333;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+  border: none;
+  outline: none;
+}
+input[type="checkbox"]::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: left 0.2s;
+}
+input[type="checkbox"]:checked {
+  background: var(--green);
+}
+input[type="checkbox"]:checked::after {
+  left: 18px;
+}
+
+/* ── Select / Number input ─────────────────────────────────────────────── */
+select, input[type="number"] {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 11.5px;
+  font-family: var(--font);
+  padding: 3px 6px;
+  outline: none;
+  flex-shrink: 0;
+}
+select:focus, input[type="number"]:focus {
+  border-color: var(--green-border);
+}
+select { cursor: pointer; }
+input[type="number"] { width: 58px; text-align: center; }
+
+/* ── Sub-options (indented) ────────────────────────────────────────────── */
+.ks-sub {
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  margin: 4px 0 6px;
+}
+.ks-sub .ks-row { padding: 3px 0; }
+
+/* ── Radio group ───────────────────────────────────────────────────────── */
+.ks-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.ks-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+input[type="radio"] {
+  accent-color: var(--green);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.ks-btn-row {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+.ks-btn {
+  flex: 1;
+  padding: 7px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: var(--font);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.ks-btn:hover {
+  background: #2c2c32;
+  color: #fff;
+}
+.ks-btn.ks-danger { color: #ff6b6b; }
+.ks-btn.ks-danger:hover { background: rgba(255,107,107,0.12); border-color: rgba(255,107,107,0.3); }
+
+/* ── Status bar ─────────────────────────────────────────────────────────── */
+.ks-status {
+  padding: 7px 14px;
+  font-size: 11px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.ks-status.ks-ok { color: var(--green); }
+.ks-status.ks-err { color: #ff6b6b; }
+
+/* ── Blocklist ──────────────────────────────────────────────────────────── */
+.ks-blocklist-empty {
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 0 4px;
+}
+.ks-blocklist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px 3px 8px;
+  margin: 2px 0;
+  background: var(--surface2);
+  border-radius: 4px;
+  font-size: 12px;
+  gap: 6px;
+}
+.ks-blocklist-slug {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ks-blocklist-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+  font-family: var(--font);
+}
+.ks-blocklist-remove:hover { color: #ff6b6b; }
+
+/* ── Disclaimer ────────────────────────────────────────────────────────── */
+.ks-disclaimer {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 6px 0 2px;
+}

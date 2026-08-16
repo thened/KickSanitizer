@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KickSanitizer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+<header class="ks-header">
+  <div class="ks-brand">
+    <img src="icons/icon48.svg" alt="" class="ks-logo" width="28" height="28">
+    <div>
+      <div class="ks-name">KickSanitizer</div>
+      <div class="ks-tagline">Clean up Kick. Keep what you came for.</div>
+    </div>
+  </div>
+  <label class="ks-master-toggle" title="Enable / disable all filtering">
+    <input type="checkbox" id="master-enabled">
+    <span class="ks-pill">ON</span>
+  </label>
+</header>
+
+<div class="ks-channel-bar" id="channel-bar" hidden>
+  <span class="ks-channel-label">Channel: <strong id="current-channel-name"></strong>
+    <span class="ks-hint" id="channel-override-state"></span></span>
+  <button class="ks-link-btn" id="clear-channel-overrides" hidden>Reset channel overrides</button>
+</div>
+
+<!-- Tabs -->
+<nav class="ks-tabs">
+  <button class="ks-tab active" data-tab="chat">Chat</button>
+  <button class="ks-tab" data-tab="page">Page</button>
+  <button class="ks-tab" data-tab="scope">Scope</button>
+</nav>
+
+<!-- ── Chat tab ─────────────────────────────────────────────────────────── -->
+<div class="ks-tab-content active" id="tab-chat">
+
+  <div class="ks-section-title">Display</div>
+  <div class="ks-row">
+    <label for="chat-timestamps">
+      Show timestamps
+      <span class="ks-hint">Kick hides these by default — turn on to always show them</span>
+    </label>
+    <input type="checkbox" id="chat-timestamps" data-key="chat_showTimestamps">
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Duplicate messages</div>
+  <div class="ks-row">
+    <label for="chat-hide-dupes">Hide duplicate messages from same user</label>
+    <input type="checkbox" id="chat-hide-dupes" data-key="chat_hideDuplicates">
+  </div>
+  <div class="ks-sub" id="dupe-options">
+    <div class="ks-row">
+      <label for="dupe-window">Duplicate window</label>
+      <select id="dupe-window" data-key="chat_duplicateWindowSeconds">
+        <option value="10">10 seconds</option>
+        <option value="30">30 seconds</option>
+        <option value="60">1 minute</option>
+        <option value="300">5 minutes</option>
+        <option value="900">15 minutes</option>
+        <option value="1800">30 minutes</option>
+        <option value="3600">1 hour</option>
+      </select>
+    </div>
+    <div class="ks-row">
+      <label for="dupe-mode">Matching mode</label>
+      <select id="dupe-mode" data-key="chat_similarityMode">
+        <option value="normalized">Normalized (recommended)</option>
+        <option value="exact">Exact only</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Emotes</div>
+  <div class="ks-row">
+    <label for="chat-emote-only">Hide emote-only messages</label>
+    <input type="checkbox" id="chat-emote-only" data-key="chat_hideEmoteOnly">
+  </div>
+  <div class="ks-row">
+    <label for="chat-max-emotes">
+      Hide messages with more than <strong id="max-emotes-val">–</strong> emotes
+      <span class="ks-hint">Set to 0 to disable</span>
+    </label>
+    <input type="number" id="chat-max-emotes" data-key="chat_maxEmotes" min="0" max="50" step="1" style="width:52px">
+  </div>
+  <div class="ks-row">
+    <label for="chat-mirror">
+      Clean chat mode
+      <span class="ks-hint">Rebuilds chat in its own list so hidden messages leave no gaps. Experimental — usernames still open Kick's profile card, but other click actions may not.</span>
+    </label>
+    <input type="checkbox" id="chat-mirror" data-key="chat_mirrorMode">
+  </div>
+  <div class="ks-row">
+    <label for="chat-mode-toggle">
+      Show the chat mode bar
+      <span class="ks-hint">Switch between clean chat and Kick's chat without opening this panel</span>
+    </label>
+    <input type="checkbox" id="chat-mode-toggle" data-key="chat_showModeToggle">
+  </div>
+
+  <div class="ks-row">
+    <label for="chat-repeated-emotes">
+      Hide repeated emotes in a message
+      <span class="ks-hint">Keeps the first of each, drops the rest</span>
+    </label>
+    <input type="checkbox" id="chat-repeated-emotes" data-key="chat_hideRepeatedEmotes">
+  </div>
+  <div class="ks-row">
+    <label for="chat-all-emotes">
+      Hide all emotes in messages
+      <span class="ks-hint">Keeps the text; hides emote-only messages entirely</span>
+    </label>
+    <input type="checkbox" id="chat-all-emotes" data-key="chat_hideAllEmotes">
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Copypasta</div>
+  <div class="ks-row">
+    <label for="chat-copypasta">
+      Collapse global copypasta
+      <span class="ks-hint">Collapse identical messages posted by several users</span>
+    </label>
+    <input type="checkbox" id="chat-copypasta" data-key="chat_collapseGlobalCopypasta">
+  </div>
+  <div class="ks-sub" id="copypasta-options">
+    <div class="ks-row">
+      <label for="copypasta-threshold">Hide after how many users</label>
+      <input type="number" id="copypasta-threshold" data-key="chat_copypastaThreshold" min="2" max="20" step="1" style="width:52px">
+    </div>
+    <div class="ks-row">
+      <label for="copypasta-window">Window</label>
+      <select id="copypasta-window" data-key="chat_copypastaWindowSeconds">
+        <option value="30">30 seconds</option>
+        <option value="60">1 minute</option>
+        <option value="120">2 minutes</option>
+        <option value="300">5 minutes</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Message content</div>
+  <div class="ks-row">
+    <label for="chat-bot-cmds">Hide bot commands <span class="ks-hint">Messages starting with !</span></label>
+    <input type="checkbox" id="chat-bot-cmds" data-key="chat_hideBotCommands">
+  </div>
+  <div class="ks-row">
+    <label for="chat-all-caps">Hide all-caps messages</label>
+    <input type="checkbox" id="chat-all-caps" data-key="chat_hideAllCaps">
+  </div>
+  <div class="ks-row">
+    <label for="chat-repeated">Hide repeated-character messages <span class="ks-hint">e.g. LLLLLL or xDxDxD</span></label>
+    <input type="checkbox" id="chat-repeated" data-key="chat_hideRepeatedChars">
+  </div>
+  <div class="ks-row">
+    <label for="chat-links">Hide messages containing links</label>
+    <input type="checkbox" id="chat-links" data-key="chat_hideLinks">
+  </div>
+
+  <div class="ks-row">
+    <label for="chat-min-length">
+      Hide messages shorter than <strong id="min-length-val">–</strong> characters
+      <span class="ks-hint">Set to 0 to disable</span>
+    </label>
+    <input type="number" id="chat-min-length" data-key="chat_minMessageLength" min="0" max="200" step="1" style="width:52px">
+  </div>
+  <div class="ks-row">
+    <label for="chat-bot-games">
+      Hide chat games
+      <span class="ks-hint">!fish and similar, plus the bot replies they generate</span>
+    </label>
+    <input type="checkbox" id="chat-bot-games" data-key="chat_hideBotGames">
+  </div>
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">System notices</div>
+  <div class="ks-row">
+    <label for="chat-gifted">Hide gifted-subscription notices</label>
+    <input type="checkbox" id="chat-gifted" data-key="chat_hideGiftedSubNotices">
+  </div>
+  <div class="ks-row">
+    <label for="chat-collapse-gifts">
+      Collapse gift batches to one line
+      <span class="ks-hint">Shows "🎁 User gifted 10 subs: …" — click to expand</span>
+    </label>
+    <input type="checkbox" id="chat-collapse-gifts" data-key="chat_collapseGiftedSubs">
+  </div>
+  <div class="ks-row">
+    <label for="chat-subs">Hide subscription notices</label>
+    <input type="checkbox" id="chat-subs" data-key="chat_hideSubscriptionNotices">
+  </div>
+  <div class="ks-row">
+    <label for="chat-follows">Hide follow notices</label>
+    <input type="checkbox" id="chat-follows" data-key="chat_hideFollowNotices">
+  </div>
+  <div class="ks-row">
+    <label for="chat-keep-deleted">
+      Keep deleted messages visible
+      <span class="ks-hint">Shows messages removed by bans or mod deletions</span>
+    </label>
+    <input type="checkbox" id="chat-keep-deleted" data-key="chat_keepDeletedMessages">
+  </div>
+  <div class="ks-row">
+    <label for="chat-kicks-min">
+      Hide Kicks notices below <strong id="kicks-min-val">–</strong> Kicks
+      <span class="ks-hint">Set to 0 to show all Kicks notices</span>
+    </label>
+    <input type="number" id="chat-kicks-min" data-key="chat_kicksMinAmount" min="0" max="9999" step="1" style="width:52px">
+  </div>
+
+</div>
+
+<!-- ── Page tab ─────────────────────────────────────────────────────────── -->
+<div class="ks-tab-content" id="tab-page">
+
+  <div class="ks-section-title">Kick features</div>
+  <div class="ks-row">
+    <label for="page-kicks">
+      Hide Kicks
+      <span class="ks-hint">Kick virtual currency panels, buttons, and banners</span>
+    </label>
+    <input type="checkbox" id="page-kicks" data-key="page_hideKicks">
+  </div>
+  <div class="ks-row">
+    <label for="page-gifters">
+      Hide Top Gifters
+      <span class="ks-hint">Gifter leaderboards and supporter panels</span>
+    </label>
+    <input type="checkbox" id="page-gifters" data-key="page_hideTopGifters">
+  </div>
+  <div class="ks-row">
+    <label for="page-animations">Hide gift animations</label>
+    <input type="checkbox" id="page-animations" data-key="page_hideGiftAnimations">
+  </div>
+
+  <div class="ks-row">
+    <label for="page-auto-agree">
+      Auto-accept chat rules
+      <span class="ks-hint">Clicks "I agree" on a channel's rules panel for you</span>
+    </label>
+    <input type="checkbox" id="page-auto-agree" data-key="page_autoAcceptChatRules">
+  </div>
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Chat overlays</div>
+  <div class="ks-row">
+    <label for="page-pinned">Hide pinned messages</label>
+    <input type="checkbox" id="page-pinned" data-key="page_hidePinnedMessages">
+  </div>
+  <div class="ks-row">
+    <label for="page-polls">Hide polls and predictions</label>
+    <input type="checkbox" id="page-polls" data-key="page_hidePollsPredictions">
+  </div>
+  <div class="ks-row">
+    <label for="page-goals">Hide channel goals</label>
+    <input type="checkbox" id="page-goals" data-key="page_hideGoals">
+  </div>
+  <div class="ks-row">
+    <label for="page-ban-notice">
+      Hide ban notice
+      <span class="ks-hint">Hides "you are banned" box and unban request button</span>
+    </label>
+    <input type="checkbox" id="page-ban-notice" data-key="page_hideBanNotice">
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Recommendations</div>
+  <div class="ks-row">
+    <label for="page-suggested">
+      Hide all suggested channels
+      <span class="ks-hint">When off, hover a channel to dislike it individually</span>
+    </label>
+    <input type="checkbox" id="page-suggested" data-key="page_hideSuggestedChannels">
+  </div>
+  <div class="ks-row">
+    <label for="page-recommended">Hide recommended streams</label>
+    <input type="checkbox" id="page-recommended" data-key="page_hideRecommendedStreams">
+  </div>
+  <div class="ks-row">
+    <label for="page-autoplay">Hide autoplay overlays</label>
+    <input type="checkbox" id="page-autoplay" data-key="page_hideAutoplayOverlays">
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Hidden channels</div>
+  <p class="ks-hint" style="margin-bottom:6px">Channels you've disliked from the sidebar. Hover a channel tile on Kick and click ✕ to add one.</p>
+  <div id="blocklist-container"></div>
+
+</div>
+
+<!-- ── Scope tab ────────────────────────────────────────────────────────── -->
+<div class="ks-tab-content" id="tab-scope">
+
+  <div class="ks-section-title">What's been hidden</div>
+  <div id="ks-stats-body" class="ks-stats">
+    <div class="ks-stats-empty">Loading…</div>
+  </div>
+  <div class="ks-row" style="margin-top:6px">
+    <button id="ks-stats-reset" class="ks-btn-secondary">Reset counters</button>
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Where to apply filters</div>
+  <div class="ks-radio-group">
+    <label class="ks-radio-row">
+      <input type="radio" name="scope" value="all"> All channels
+    </label>
+    <label class="ks-radio-row">
+      <input type="radio" name="scope" value="channel"> Current channel only
+    </label>
+    <label class="ks-radio-row">
+      <input type="radio" name="scope" value="session"> This browser session only
+    </label>
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Developer</div>
+  <div class="ks-row">
+    <label for="dev-mode">
+      Selector debug mode
+      <span class="ks-hint">Outlines detected page elements on Kick.com</span>
+    </label>
+    <input type="checkbox" id="dev-mode" data-key="developerMode">
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Settings management</div>
+  <div class="ks-btn-row">
+    <button class="ks-btn" id="btn-reveal">Reveal all hidden</button>
+    <button class="ks-btn" id="btn-reset">Reset to defaults</button>
+  </div>
+  <div class="ks-btn-row">
+    <button class="ks-btn" id="btn-export">Export settings</button>
+    <button class="ks-btn" id="btn-import">Import settings</button>
+  </div>
+  <input type="file" id="import-file" accept=".json" hidden>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">About</div>
+  <div class="ks-about">
+    <div class="ks-about-line">
+      <strong>KickSanitizer</strong> <span id="about-version">v–</span>
+    </div>
+    <div class="ks-about-line">Made by <strong>nedx</strong></div>
+    <div class="ks-about-note">
+      Clean chat rebuilds Kick's chat in its own list, so filtered messages leave
+      no gaps. While it is on, the extension keeps a receive-only WebSocket to
+      Kick's chat service to learn about deleted messages and bans — nothing is
+      ever sent, and no data leaves your browser.
+    </div>
+    <div class="ks-about-note">
+      Independent extension. Not affiliated with or endorsed by Kick.com.
+    </div>
+  </div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-disclaimer">
+    KickSanitizer is an independent browser extension and is not affiliated with or endorsed by Kick.
+  </div>
+
+</div>
+
+<!-- ── Footer ───────────────────────────────────────────────────────────── -->
+<div id="status-msg" class="ks-status" hidden></div>
+
+<script src="popup.js"></script>
+</body>
+</html>
