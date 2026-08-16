@@ -36,6 +36,7 @@
         KS.PageFilters.scan(document.body);
         _injectPageButton();
         _startButtonWatch();
+        _startInputFocusWatch();
       }, 800);
 
       _startObserver();
@@ -196,6 +197,56 @@
       btn.click();
       return;
     }
+  }
+
+  // ── Restore focus after Kick disables the chat input ───────────────────────
+  //
+  // In slow mode (and after some other posting restrictions) Kick disables the
+  // input for a cooldown once you send. Focus falls to the document, so the
+  // next keys you type hit Kick's global player hotkeys — space pauses the
+  // stream instead of typing a space. Kick's doing, not ours; this just puts
+  // focus back when the field comes alive again.
+  //
+  // Driven by the DOM rather than the chatroom's `message_interval`: config
+  // says what the cooldown is *meant* to be, the DOM says when you can actually
+  // type. Latency, followers-mode and rejected messages all break the timer.
+  //
+  // isContentEditable is read from a freshly queried element each tick, so it
+  // holds whether Kick flips the attribute, swaps the node, or disables it some
+  // other way — none of which I have been able to observe directly.
+  let _inputWatch = null;
+  let _inputWasDisabled = false;
+  let _chatFocusWanted = false;   // was the user actually typing in chat?
+
+  function _startInputFocusWatch() {
+    document.addEventListener('focusin', (e) => {
+      const input = KS.Sel.find(KS.Sel.chatInputArea);
+      if (input && (e.target === input || input.contains(e.target))) {
+        _chatFocusWanted = true;
+      } else if (e.target !== document.body) {
+        // Focus moved somewhere deliberately — do not fight the user for it.
+        _chatFocusWanted = false;
+      }
+    }, true);
+
+    clearInterval(_inputWatch);
+    _inputWatch = setInterval(() => {
+      if (!_settings || !_settings.enabled) return;
+      if (!_settings.chat_restoreFocusAfterCooldown) return;
+
+      const el = KS.Sel.find(KS.Sel.chatInputArea);
+      if (!el) return;
+
+      if (!el.isContentEditable) { _inputWasDisabled = true; return; }
+      if (!_inputWasDisabled) return;
+
+      _inputWasDisabled = false;
+      // Only reclaim focus that was LOST. If it sits on another control the
+      // user put it there.
+      if (_chatFocusWanted && document.activeElement === document.body) {
+        try { el.focus(); } catch (_) { }
+      }
+    }, 250);
   }
 
   function _applyTimestamps(show) {

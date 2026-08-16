@@ -37,6 +37,9 @@ KS.DEFAULT_SETTINGS = {
   chat_kicksMinAmount: 0,             // 0 = show all; N = hide Kicks notices where amount < N
   chat_keepDeletedMessages: false,    // re-show messages removed by bans/mod deletions
   chat_showTimestamps: false,         // force Kick's built-in timestamp spans to always show
+  // Kick disables the chat input for a cooldown in slow mode; focus falls to
+  // the page and typing then triggers the player hotkeys. Put focus back.
+  chat_restoreFocusAfterCooldown: true,
 
   // ── Page ────────────────────────────────────────────────────────────────────
   // Off by default on purpose: this clicks "I agree" on a channel's chat rules
