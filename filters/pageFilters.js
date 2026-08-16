@@ -180,9 +180,128 @@ KS.PageFilters = (function () {
     const spans = document.querySelectorAll(
       '[data-testid^="sidebar-"] .bg-green-500 + span');
     for (const span of spans) {
-      const isLive = on && (span.textContent || '').trim().toUpperCase() === 'LIVE';
+      // A badge already showing a real viewer count keeps it — replacing a
+      // number with the word LAME would destroy information, and both features
+      // draw through the same ::after.
+      const isLive = on && !span.dataset.ksViewers
+        && (span.textContent || '').trim().toUpperCase() === 'LIVE';
       if (isLive) span.dataset.ksLame = '1';
       else delete span.dataset.ksLame;
+    }
+  }
+
+  // ── Forced viewer counts in the sidebar ───────────────────────────────────
+  //
+  // Kick renders "LIVE" for followed channels instead of the number. The number
+  // is not anywhere in the DOM, so it has to be asked for: one lookup per live
+  // channel, refreshed every 10 minutes. That interval is deliberately long —
+  // this is the only thing the extension does that generates real traffic, and
+  // a sidebar number does not need to be fresher than that.
+  //
+  // Written as a data attribute and drawn by CSS, not as textContent: the
+  // sidebar is React-rendered and rewrites its own text whenever a channel goes
+  // live or offline. Same split as the LAME badge for the same reason.
+  const VIEWERS_REFRESH_MS = 10 * 60 * 1000;
+  const VIEWERS_STAGGER_MS = 250;
+
+  const _viewerCounts = new Map();   // slug -> formatted string
+  let _viewersTimer = null;
+  let _viewersBusy = false;
+
+  function _liveBadges() {
+    return document.querySelectorAll('[data-testid^="sidebar-"] .bg-green-500 + span');
+  }
+
+  function _slugFor(badge) {
+    const link = badge.closest('a[href]');
+    const m = link && (link.getAttribute('href') || '').match(/^\/([^\/?#]+)/);
+    return m ? m[1].toLowerCase() : null;
+  }
+
+  function _formatViewers(n) {
+    if (!Number.isFinite(n) || n < 0) return null;
+    if (n < 1000) return String(n);
+    if (n < 1000000) return (n / 1000).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, '') + 'K';
+    return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+
+  // The field name is NOT confirmed against a live response, so several shapes
+  // are tried and anything unrecognised yields null. Failing open leaves the
+  // badge reading LIVE, which is merely the current behaviour; guessing wrong
+  // and rendering a number would be worse than showing nothing.
+  function _extractViewers(data) {
+    const ls = data && (data.livestream || data.livestream_data || data);
+    if (!ls || typeof ls !== 'object') return null;
+    const raw = ls.viewer_count ?? ls.viewers ?? ls.viewerCount ?? ls.current_viewers;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  async function _refreshViewerCounts() {
+    if (_viewersBusy) return;
+    if (!_settings || !_settings.enabled || !_settings.page_forceViewerCount) return;
+
+    const slugs = [];
+    for (const badge of _liveBadges()) {
+      const slug = _slugFor(badge);
+      // Only channels showing LIVE. One that already displays a number needs no
+      // lookup, and asking for it would be traffic for nothing.
+      if (slug && (badge.textContent || '').trim().toUpperCase() === 'LIVE'
+          && !slugs.includes(slug)) slugs.push(slug);
+    }
+    if (!slugs.length) return;
+
+    _viewersBusy = true;
+    try {
+      for (const slug of slugs) {
+        try {
+          const r = await fetch('/api/v2/channels/' + encodeURIComponent(slug),
+                                { headers: { Accept: 'application/json' } });
+          if (r.ok) {
+            const n = _extractViewers(await r.json());
+            const text = _formatViewers(n);
+            if (text) _viewerCounts.set(slug, text);
+          }
+        } catch (_) { /* one channel failing must not stop the rest */ }
+        // Spaced out rather than fired as a burst — a dozen simultaneous
+        // requests from a page that normally makes none is the kind of thing
+        // rate limiting notices.
+        await new Promise(res => setTimeout(res, VIEWERS_STAGGER_MS));
+      }
+    } finally {
+      _viewersBusy = false;
+    }
+    _applyViewerCounts();
+  }
+
+  // Re-applied on every scan, because React replaces these nodes and drops the
+  // attribute with them. Reads only from cache, so it costs nothing.
+  function _applyViewerCounts() {
+    const on = !!(_settings && _settings.enabled && _settings.page_forceViewerCount);
+    for (const badge of _liveBadges()) {
+      if (!on) { delete badge.dataset.ksViewers; continue; }
+      const slug = _slugFor(badge);
+      const text = slug && _viewerCounts.get(slug);
+      // Only override the word LIVE. If Kick is already showing a number, that
+      // number is fresher than ours and must not be replaced by a stale one.
+      if (text && (badge.textContent || '').trim().toUpperCase() === 'LIVE') {
+        badge.dataset.ksViewers = text;
+      } else {
+        delete badge.dataset.ksViewers;
+      }
+    }
+  }
+
+  function _syncViewerTimer() {
+    const on = !!(_settings && _settings.enabled && _settings.page_forceViewerCount);
+    if (on && !_viewersTimer) {
+      _viewersTimer = setInterval(_refreshViewerCounts, VIEWERS_REFRESH_MS);
+      _refreshViewerCounts();
+    } else if (!on && _viewersTimer) {
+      clearInterval(_viewersTimer);
+      _viewersTimer = null;
+      _viewerCounts.clear();
+      _applyViewerCounts();
     }
   }
 
@@ -270,6 +389,10 @@ KS.PageFilters = (function () {
     // not hide one, so there is nothing to find or restore.
     const lame = !!(settings.enabled && settings.page_liveSaysLame);
     document.body.classList.toggle('ks-lame', lame);
+    _syncViewerTimer();
+    // Viewer counts first: _markLiveBadges refuses to touch a badge that has
+    // one, and that guard only works if the attribute is already there.
+    _applyViewerCounts();
     _markLiveBadges(lame);
     if (!settings.enabled) { restoreAll(); return; }
 
@@ -343,6 +466,7 @@ KS.PageFilters = (function () {
         if (_isSafeToHide(el)) _hideEl(el, filter.reason);
       }
     }
+    _applyViewerCounts();
     _markLiveBadges(!!_settings.page_liveSaysLame);
     _applyChannelBlocklist(_settings);
   }

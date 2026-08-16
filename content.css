@@ -927,3 +927,28 @@ body.ks-diablo #ks-mirror .ks-mirror-row img {
   filter: sepia(.35) saturate(1.15) brightness(.92)
           drop-shadow(0 0 3px rgba(255, 120, 30, .35));
 }
+
+/* Chatter count, right of the theme picker in the controls row. */
+.ks-mirror-chatters {
+  margin-left: auto;
+  color: #b4b4bd;
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* Dimmed while the window is not yet full, so a partial figure does not read
+   as a complete one. The tooltip says how much has actually been observed. */
+.ks-mirror-chatters.ks-partial { opacity: .55; font-style: italic; }
+
+/* The window picker is a fixed narrow control — unlike the theme select it must
+   not stretch, or it eats the row. */
+.ks-mirror-select.ks-mirror-win { flex: 0 0 auto; max-width: 4.5em; }
+
+/* Forced viewer count. Same technique as the LAME badge and for the same
+   reason: React rewrites this text on its own schedule, but never sees ::after.
+   The value rides in the attribute so one rule serves every channel. */
+[data-ks-viewers] { font-size: 0 !important; }
+[data-ks-viewers]::after {
+  content: attr(data-ks-viewers);
+  font-size: 0.875rem;
+}

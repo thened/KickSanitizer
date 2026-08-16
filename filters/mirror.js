@@ -34,6 +34,8 @@ KS.Mirror = (function () {
   let _origins = new WeakMap();  // clone -> original row, for click forwarding
   let _bar = null;               // header bar (outside the scroll list)
   let _countEl = null;           // "N filtered" readout in the header
+  let _chattersEl = null;        // "N chatters" readout beside the theme picker
+  let _chattersTimer = null;
   let _barMode = null;           // 'clean' | 'kick' — bar is rebuilt only on change
 
   // Theme id → picker label. The id doubles as the body class suffix (ks-<id>),
@@ -414,6 +416,7 @@ KS.Mirror = (function () {
     // the mode actually changes; otherwise just refresh the number.
     if (_barMode === (on ? 'clean' : 'kick')) {
       _updateCount();
+      _updateChatters();
       return;
     }
     _barMode = on ? 'clean' : 'kick';
@@ -467,10 +470,33 @@ KS.Mirror = (function () {
       _removeBar();
     });
 
+    // How many people are actually talking, over a window you pick. Sits at the
+    // right of the controls row, away from the theme picker.
+    _chattersEl = document.createElement('span');
+    _chattersEl.className = 'ks-mirror-chatters';
+
+    const win = document.createElement('select');
+    win.className = 'ks-mirror-select ks-mirror-win';
+    win.title = 'How far back the chatter count looks';
+    for (const mins of [15, 30]) {
+      const o = document.createElement('option');
+      o.value = String(mins);
+      o.textContent = mins + 'm';
+      if (Number(_settings.chat_chattersWindow || 15) === mins) o.selected = true;
+      win.appendChild(o);
+    }
+    win.addEventListener('change', () => {
+      if (KS.updateSettings) KS.updateSettings({ chat_chattersWindow: Number(win.value) });
+      _settings.chat_chattersWindow = Number(win.value);
+      _updateChatters();
+    });
+
     // Controls row, ABOVE the status row — appearance now, more later.
     const controls = document.createElement('div');
     controls.className = 'ks-mirror-controls';
     controls.appendChild(theme);
+    controls.appendChild(_chattersEl);
+    controls.appendChild(win);
 
     // Status row: which mode you are in, how much has been filtered, the way out.
     const row1 = document.createElement('div');
@@ -483,6 +509,9 @@ KS.Mirror = (function () {
     _bar.appendChild(controls);
     _bar.appendChild(row1);
     _updateCount();
+    _updateChatters();
+    clearInterval(_chattersTimer);
+    _chattersTimer = setInterval(_updateChatters, CHATTERS_REFRESH_MS);
     _layout();
     _hideNewMessagesIndicator();
     _layout();          // pinned messages appear and vanish on their own
@@ -564,6 +593,9 @@ KS.Mirror = (function () {
   }
 
   function _removeBar() {
+    clearInterval(_chattersTimer);
+    _chattersTimer = null;
+    _chattersEl = null;
     if (_bar) { _bar.remove(); _bar = null; }
     _barMode = null;
     _countEl = null;
@@ -580,6 +612,32 @@ KS.Mirror = (function () {
   // Shows what clean chat is actually doing for you. Counts come from KS.Stats,
   // which is incremented at every hide, so this covers all filters rather than
   // just the ones the mirror sees.
+  // Refreshed on a timer, not per message: stats() prunes the whole map, which
+  // is the expensive direction, and a chatter count does not need to be exact
+  // to the second.
+  const CHATTERS_REFRESH_MS = 5000;
+
+  function _updateChatters() {
+    if (!_chattersEl || !_chattersEl.isConnected) return;
+    if (!window.KS || !KS.Chatters) return;
+
+    const mins = Number(_settings && _settings.chat_chattersWindow) || 15;
+    const { chatters, emoteOnly } = KS.Chatters.stats(mins);
+
+    // Say when the window is not yet full rather than presenting a partial
+    // figure as a complete one — a 30m count on a tab open for 3 minutes is
+    // three minutes of data, and reading it as half an hour would be wrong.
+    const since = KS.Chatters.firstSeen();
+    const elapsedMin = since ? (Date.now() - since) / 60000 : 0;
+    const partial = elapsedMin < mins;
+
+    _chattersEl.textContent = '👥 ' + chatters + (emoteOnly ? ' · ' + emoteOnly + ' 😀' : '');
+    _chattersEl.classList.toggle('ks-partial', partial);
+    _chattersEl.title = partial
+      ? `${chatters} chatters and ${emoteOnly} emote-only so far — only ${Math.floor(elapsedMin)} of ${mins} minutes observed`
+      : `${chatters} chatters in the last ${mins} minutes, ${emoteOnly} of them posting only emotes`;
+  }
+
   function _updateCount() {
     if (!_countEl) return;
     let n = 0;

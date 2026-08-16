@@ -115,6 +115,14 @@ KS.ChatFilters = (function () {
 
     const s = _settings;
 
+    // Count who is talking BEFORE any filter runs, and only on a message's
+    // first sighting so the virtualiser re-rendering a row cannot inflate it.
+    // This is a fact about the channel, not about what you chose to hide, so it
+    // deliberately counts messages that are about to be filtered away.
+    if (_firstSeen && window.KS && KS.Chatters) {
+      KS.Chatters.record(getUsername(msgEl), isEmoteOnly(msgEl));
+    }
+
     // Nothing that mentions you is ever filtered.
     //
     // Someone replying to you is the single most important message in the
@@ -569,7 +577,34 @@ KS.ChatFilters = (function () {
   // this message"; only this answers "how many".
   let _filteredTotal = 0;
 
+  // Identity for counting. This has to satisfy two things at once: the same
+  // message must not count twice when the virtualiser destroys and recreates
+  // its row, and two DIFFERENT messages must never collapse into one.
+  //
+  // username|time|text satisfied the first and failed the second badly. A
+  // duplicate has the same author and the same text by definition, so any
+  // repeat inside the same clock minute produced an identical key and went
+  // uncounted — meaning the single most-filtered thing in chat barely moved the
+  // number. Emote-only messages were worse still: their text normalises to '',
+  // so every one from a given user in a minute collapsed to one.
+  //
+  // The virtualiser's own data-index is the message's sequence number in Kick's
+  // list: unique per message, stable across the re-render, and reset when the
+  // channel changes. It is the "message id" this counter was always meant to
+  // key on. The old composite stays as a fallback for rows rendered outside a
+  // [data-index] wrapper.
+  // Paired with the text rather than used alone: if Kick ever trims its message
+  // array the virtualiser would reuse low indices for new messages, and an
+  // index on its own would then read as already-counted. The same message
+  // re-rendered yields the same pair; a reused index carrying different text
+  // does not.
   function _messageIdentity(el) {
+    const wrap = el.closest ? el.closest('[data-index]') : null;
+    const idx = wrap && wrap.dataset ? wrap.dataset.index : null;
+    if (idx !== null && idx !== undefined && idx !== '') {
+      return 'i' + idx + '|' + (getMessageText(el) || '').slice(0, 60);
+    }
+
     const user = getUsername(el) || '';
     const text = getMessageText(el) || '';
     const time = (el.querySelector('span.text-neutral')?.textContent || '').trim();

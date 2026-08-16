@@ -171,6 +171,9 @@
     // Stats are per-channel and the slug is resolved once at load, so counts
     // would otherwise keep accruing against the channel you started on.
     if (KS.Stats) { KS.Stats.flush(); KS.Stats.setChannel(newChannel); }
+    // Chatters are per-channel by definition; carrying them across a SPA
+    // navigation would report the previous channel's crowd as this one's.
+    if (KS.Chatters) KS.Chatters.reset();
 
     // Re-load effective settings for the new channel
     KS.getEffectiveSettings(newChannel).then((settings) => {

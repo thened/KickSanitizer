@@ -44,6 +44,10 @@ KS.DEFAULT_SETTINGS = {
   // A message that @-mentions you is never filtered, whatever else it trips.
   // Someone replying to you is the one message you cannot afford to lose.
   chat_neverFilterMentions: true,
+  // Minutes of history behind the chatter count in the mode bar. It can only
+  // count what it has seen, so the readout marks itself partial until the
+  // tab has actually been open this long.
+  chat_chattersWindow: 15,
   // Level badges are pure noise — a number that says how long someone has idled
   // in the channel. Hidden by default; subscriber and moderator badges stay,
   // since those change how you read a message.
@@ -77,6 +81,10 @@ KS.DEFAULT_SETTINGS = {
   // default like the other automations: it clicks a button for you, even
   // though that click only dismisses a notice.
   page_autoDismissGiftDialog: false,
+  // Replaces the sidebar's "LIVE" with the actual viewer count. Off by
+  // default: it is the only feature that makes network requests of its own,
+  // one per live channel every 10 minutes.
+  page_forceViewerCount: false,
   page_liveSaysLame: false,            // sidebar "LIVE" badge reads "LAME"
   page_hideSidebar: false,
   page_hideBanNotice: false,     // hides "you are banned" box and unban-request button
