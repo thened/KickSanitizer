@@ -295,6 +295,23 @@ KS.Mirror = (function () {
     const col = _origList && _origList.parentElement;
     if (!col) return;
 
+    // The wrapper, which is the reliable target. Captured live 2026-08-16:
+    //   <div class="absolute right-0 bottom-2 left-0 grid grid-cols-1
+    //               items-center justify-items-center">
+    // It sits in the DOM permanently and is EMPTY until hover — which is why
+    // matching the pill's text could only ever react after it appeared, and why
+    // it is impossible to inspect in DevTools (moving to the console drops the
+    // hover and the contents vanish). Marking the container once ends the
+    // flicker: there is nothing to reveal.
+    for (const el of col.querySelectorAll('div[class*="bottom-2"]')) {
+      if (el.dataset.ksHidden) continue;
+      if (_host && _host.contains(el)) continue;
+      const c = el.classList;
+      if (!c.contains('absolute') || !c.contains('grid')) continue;
+      el.dataset.ksHidden = 'new-messages-indicator';
+    }
+
+    // Text match kept as a fallback, in case Kick restyles that wrapper.
     for (const el of col.querySelectorAll('div,button,span')) {
       if (el.dataset.ksHidden) continue;
       if (_host && _host.contains(el)) continue;          // never our own rows
