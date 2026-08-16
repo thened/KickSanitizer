@@ -45,6 +45,9 @@ KS.DEFAULT_SETTINGS = {
   // Off by default on purpose: this clicks "I agree" on a channel's chat rules
   // for you. Agreeing to someone's rules is the user's call, not ours.
   page_autoAcceptChatRules: false,
+  // Clicks Kick's daily-reward CTA and confirms it, for collectible emotes.
+  // Off by default: it acts on the user's account for them.
+  page_autoClaimRewards: false,
   page_hideKicks: true,
   page_hideTopGifters: true,
   page_hideGiftAnimations: true,

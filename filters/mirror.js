@@ -32,6 +32,7 @@ KS.Mirror = (function () {
   let _origins = new WeakMap();  // clone -> original row, for click forwarding
   let _bar = null;               // header bar (outside the scroll list)
   let _countEl = null;           // "N filtered" readout in the header
+  let _odoEl = null;             // rolling-digit odometer inside it
   let _isMod = false;            // viewer can moderate (mod controls seen)
   let _noticeDismissed = false;  // moderator chose to stay on clean chat
 
@@ -277,11 +278,42 @@ KS.Mirror = (function () {
     _bar.appendChild(hide);
     _updateCount();
     _layout();
+    _hideNewMessagesIndicator();
+  }
+
+  // Kick shows an "N new messages" affordance whenever its list is not scrolled
+  // to the bottom. In clean chat we never scroll their list, so it drifts and
+  // counts everything as unseen — including messages already sitting in our own
+  // list. The number is meaningless here, so hide it.
+  //
+  // Matched on text rather than a selector: the element's markup is unknown and
+  // guessing Kick's class names has been wrong every time. Restricted to the
+  // chat column, to leaf-ish nodes, and never inside our own list.
+  function _hideNewMessagesIndicator() {
+    if (!isOn()) return;
+    const col = _origList && _origList.parentElement;
+    if (!col) return;
+
+    for (const el of col.querySelectorAll('div,button,span')) {
+      if (el.dataset.ksHidden) continue;
+      if (_host && _host.contains(el)) continue;          // never our own rows
+      if (el.children.length > 3) continue;               // want the small node
+      const t = (el.textContent || '').trim();
+      if (!/^\d*\s*new messages?$/i.test(t)) continue;
+      el.dataset.ksHidden = 'new-messages-indicator';
+    }
+  }
+
+  function _showNewMessagesIndicator() {
+    document.querySelectorAll('[data-ks-hidden="new-messages-indicator"]')
+      .forEach(el => delete el.dataset.ksHidden);
   }
 
   function _removeBar() {
     if (_bar) { _bar.remove(); _bar = null; }
     _countEl = null;
+    _odoEl = null;
+    _odoEl = null;
     _layout();
   }
 
@@ -297,8 +329,51 @@ KS.Mirror = (function () {
     if (!_countEl) return;
     let n = 0;
     try { n = (KS.Stats && KS.Stats.sessionTotal && KS.Stats.sessionTotal()) || 0; } catch (_) { }
-    _countEl.textContent = n ? `${n} filtered` : '';
-    _countEl.title = n ? 'Messages and page clutter hidden since this tab loaded' : '';
+
+    if (!n) { _countEl.innerHTML = ''; _countEl.title = ''; return; }
+    _countEl.title = 'Messages and page clutter hidden since this tab loaded';
+
+    if (!_odoEl || !_odoEl.isConnected) {
+      _countEl.innerHTML = '';
+      _odoEl = document.createElement('span');
+      _odoEl.className = 'ks-odo';
+      _countEl.appendChild(_odoEl);
+      _countEl.appendChild(document.createTextNode(' filtered'));
+    }
+    _setOdometer(_odoEl, n);
+  }
+
+  // Car-odometer readout: each digit is a window onto a 0-9 strip that slides.
+  // Only the transform changes per update, so the browser animates it on the
+  // compositor — this ticks on every message, so it must not cause layout.
+  function _setOdometer(host, value) {
+    const s = String(value);
+
+    // Rebuild only when the number of digits changes (9 -> 10, 99 -> 100).
+    if (host.childElementCount !== s.length) {
+      host.innerHTML = '';
+      for (let i = 0; i < s.length; i++) {
+        const digit = document.createElement('span');
+        digit.className = 'ks-odo-digit';
+        const strip = document.createElement('span');
+        strip.className = 'ks-odo-strip';
+        for (let d = 0; d <= 9; d++) {
+          const cell = document.createElement('span');
+          cell.textContent = String(d);
+          strip.appendChild(cell);
+        }
+        digit.appendChild(strip);
+        host.appendChild(digit);
+      }
+    }
+
+    for (let i = 0; i < s.length; i++) {
+      const strip = host.children[i].firstElementChild;
+      const d = Number(s[i]);
+      if (strip.dataset.d === String(d)) continue;   // already showing it
+      strip.dataset.d = String(d);
+      strip.style.transform = `translateY(${-d}em)`;
+    }
   }
 
   function switchToKickChat() { _setMirror(false); }
@@ -383,6 +458,7 @@ KS.Mirror = (function () {
 
   function _unmount() {
     if (KS.ChatSocket) KS.ChatSocket.disconnect();
+    _showNewMessagesIndicator();
     _pendingIds.clear();
     _seenKeys.clear();
     _seenOrder.length = 0;

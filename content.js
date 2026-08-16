@@ -14,6 +14,7 @@
   let _removedQueue = [];
   let _mutationFlushPending = false;
   let _currentChannel = null;
+  let _observedChat = null;   // chat container the observer is attached to
 
   // ── Boot ───────────────────────────────────────────────────────────────────
 
@@ -48,8 +49,22 @@
 
   // ── MutationObserver ───────────────────────────────────────────────────────
 
+  // Two observers, deliberately.
+  //
+  // Chat filters only ever care about the chat list, but this watched the whole
+  // document and pushed EVERY added node anywhere on the page into the queue —
+  // player chrome, the viewer-count odometer, overlays — then ran chat and page
+  // filters over each one. Scoping the chat observer to the chat container cuts
+  // the volume enormously.
+  //
+  // Page furniture still needs watching, but not per node: it only has to know
+  // that *something* changed, and PageFilters coalesces to one pass per 400ms.
+  let _pageObserver = null;
+
   function _startObserver() {
     if (_observer) _observer.disconnect();
+    if (_pageObserver) _pageObserver.disconnect();
+
     _observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
         for (const node of m.addedNodes) {
@@ -70,7 +85,30 @@
         requestAnimationFrame(_flushMutations);
       }
     });
-    _observer.observe(document.body, { childList: true, subtree: true });
+
+    // The chat container is replaced on navigation and re-render, so fall back
+    // to body until it exists and re-attach when it appears.
+    const chat = KS.Sel.find(KS.Sel.chatContainer);
+    _observer.observe(chat || document.body, { childList: true, subtree: true });
+    _observedChat = chat || null;
+
+    _pageObserver = new MutationObserver(() => {
+      // No node inspection, no queue — just poke the debounced page pass.
+      KS.PageFilters.handleAddedNode(document.body);
+    });
+    _pageObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // Re-point the chat observer if Kick swaps the container out from under us.
+  function _ensureChatObserved() {
+    const chat = KS.Sel.find(KS.Sel.chatContainer);
+    if (!chat || chat === _observedChat) return;
+    _observedChat = chat;
+    if (_observer) {
+      _observer.disconnect();
+      _observer.observe(chat, { childList: true, subtree: true });
+      KS.ChatFilters.scanExisting();   // catch anything added while detached
+    }
   }
 
   function _flushMutations() {
@@ -82,8 +120,10 @@
     }
     const batch = _mutationQueue.splice(0);
     for (const node of batch) {
+      // Chat only. Page filters are driven by their own observer and coalesce
+      // to one pass per 400ms — calling them per node here as well was pure
+      // duplicate work.
       KS.ChatFilters.handleAddedNode(node);
-      KS.PageFilters.handleAddedNode(node);
     }
     const removed = _removedQueue.splice(0);
     for (const { node, target, nextSibling } of removed) {
@@ -214,9 +254,58 @@
   // isContentEditable is read from a freshly queried element each tick, so it
   // holds whether Kick flips the attribute, swaps the node, or disables it some
   // other way — none of which I have been able to observe directly.
+  //
+  // Restoring focus afterwards is only half of it. The damage happens WHILE the
+  // field is dead: keys typed during the cooldown reach Kick's hotkeys, so a
+  // space pauses the stream. Those keystrokes are swallowed and buffered, then
+  // replayed into the input once it comes back.
   let _inputWatch = null;
   let _inputWasDisabled = false;
   let _chatFocusWanted = false;   // was the user actually typing in chat?
+  let _keyBuffer = '';
+  const KEY_BUFFER_MAX = 500;     // Kick's own limit is lower; this is a sanity cap
+
+  function _inputIsDisabled() {
+    const el = KS.Sel.find(KS.Sel.chatInputArea);
+    return !!el && !el.isContentEditable;
+  }
+
+  // Capture phase on window: run before Kick's own document-level handlers.
+  function _swallowKeysDuringCooldown(e) {
+    if (!_settings || !_settings.enabled) return;
+    if (!_settings.chat_restoreFocusAfterCooldown) return;
+    if (!_chatFocusWanted) return;                 // user wasn't typing in chat
+    if (e.ctrlKey || e.metaKey || e.altKey) return; // leave real shortcuts alone
+    if (document.activeElement !== document.body) return;  // focus is somewhere real
+    if (!_inputIsDisabled()) return;
+
+    // Only printable characters and the edits that go with them. Tab, Escape,
+    // F-keys and arrows stay functional.
+    const printable = e.key && e.key.length === 1;
+    const editing = e.key === 'Backspace' || e.key === 'Enter';
+    if (!printable && !editing) return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    if (e.type !== 'keydown') return;
+    if (e.key === 'Backspace') _keyBuffer = _keyBuffer.slice(0, -1);
+    else if (e.key === 'Enter') { /* cannot send yet; keep the text */ }
+    else if (_keyBuffer.length < KEY_BUFFER_MAX) _keyBuffer += e.key;
+  }
+
+  // Put what was typed during the lockout back into the editor. Lexical listens
+  // for beforeinput, which execCommand('insertText') raises — so it goes through
+  // Kick's own input pipeline rather than us writing to the DOM behind its back.
+  function _flushKeyBuffer(el) {
+    if (!_keyBuffer) return;
+    const text = _keyBuffer;
+    _keyBuffer = '';
+    try {
+      el.focus();
+      document.execCommand('insertText', false, text);
+    } catch (_) { /* characters are lost, same as without the extension */ }
+  }
 
   function _startInputFocusWatch() {
     document.addEventListener('focusin', (e) => {
@@ -245,8 +334,133 @@
       // user put it there.
       if (_chatFocusWanted && document.activeElement === document.body) {
         try { el.focus(); } catch (_) { }
+        _flushKeyBuffer(el);          // replay what was typed during the lockout
+      } else {
+        _keyBuffer = '';              // focus moved on; the text is not wanted
       }
     }, 250);
+
+    // Capture phase, on window, so this runs before Kick's document handlers.
+    window.addEventListener('keydown', _swallowKeysDuringCooldown, true);
+    window.addEventListener('keypress', _swallowKeysDuringCooldown, true);
+  }
+
+  // ── Auto-claim the daily reward (collectible emotes) ───────────────────────
+  //
+  // Confirmed markup 2026-08-16:
+  //   <button aria-label="Claim Your Daily Reward" aria-haspopup="dialog"
+  //           aria-expanded="false">
+  //     <video src="https://static.kick.com/rewards/reward-available-CTA.webm">
+  //
+  // aria-haspopup means claiming is two steps: open the dialog, then confirm
+  // inside it. The confirm button's markup is unknown, so it is matched by
+  // accessible name within a dialog that is actually about rewards — never by
+  // guessing a class.
+  //
+  // Opt-in (page_autoClaimRewards, default off): this acts on the user's
+  // account on their behalf, same reasoning as auto-accepting chat rules.
+  // The whole exchange happens out of sight: the CTA is hidden, the dialog is
+  // hidden the moment it opens, Claim is clicked, and the dialog is closed.
+  // A programmatic .click() works on a hidden element, so nothing needs to be
+  // visible for any of it.
+  //
+  // Closing is not optional. This is a Radix dialog: while open it puts
+  // `pointer-events: none` on <body> and traps focus. Hiding it and walking
+  // away would leave the page unclickable with nothing on screen to explain
+  // why — far worse than the popup we were trying to avoid.
+  let _claimStage = 0;            // 0 idle · 1 dialog opening · 2 claimed, closing
+  let _claimAt = 0;
+  let _claimDlg = null;
+  let _claimCta = null;
+  let _claimTimer = null;
+
+  function _rewardDialog() {
+    for (const dlg of document.querySelectorAll('[role="dialog"]')) {
+      if (/daily reward/i.test(dlg.textContent || '')) return dlg;
+    }
+    return null;
+  }
+
+  function _namedButton(root, re) {
+    for (const b of root.querySelectorAll('button')) {
+      if (b.disabled) continue;
+      const name = ((b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')).trim();
+      if (re.test(name)) return b;
+    }
+    return null;
+  }
+
+  function _autoClaimReward() {
+    if (!_settings || !_settings.enabled || !_settings.page_autoClaimRewards) {
+      return;
+    }
+
+    // Stage 2: claimed — close it and hand the page back.
+    if (_claimStage === 2) {
+      const dlg = _claimDlg && _claimDlg.isConnected ? _claimDlg : _rewardDialog();
+      if (dlg) {
+        const close = _namedButton(dlg, /\bclose\b/i);
+        if (close) close.click();
+        else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      }
+      // Claim went through — now the CTA can go off-stage, and only now.
+      if (_claimCta && _claimCta.isConnected) _claimCta.dataset.ksOffstage = 'reward-cta';
+      _endClaim();
+      return;
+    }
+
+    // Stage 1: dialog should be up — hide it, then claim.
+    if (_claimStage === 1) {
+      if (Date.now() - _claimAt > 8000) { _endClaim(); return; }   // give the page back
+      const dlg = _rewardDialog();
+      if (!dlg) return;                      // still opening
+      _claimDlg = dlg;
+      dlg.dataset.ksOffstage = 'reward-dialog';  // rendered, but out of sight
+      const claim = _namedButton(dlg, /\b(claim|collect)\b/i);
+      if (!claim || claim.dataset.ksClaimed) return;
+      claim.dataset.ksClaimed = '1';
+      claim.click();
+      _claimStage = 2;
+      return;
+    }
+
+    // Stage 0: find the CTA and open it.
+    //
+    // Deliberately NOT hidden here. Hiding on sight meant that if anything
+    // downstream failed, the user was left with an invisible button they could
+    // not click themselves — the automation breaking would also remove the
+    // manual fallback. It goes off-stage only once a claim has gone through.
+    for (const btn of document.querySelectorAll('button[aria-label]')) {
+      if (!/claim.*reward/i.test(btn.getAttribute('aria-label') || '')) continue;
+      if (btn.dataset.ksClaimed) return;
+      btn.dataset.ksClaimed = '1';
+      _claimCta = btn;
+
+      // Blind the dialog BEFORE it exists. Marking it off-stage after the fact
+      // left it fully visible until the next watchdog tick — up to 2 seconds of
+      // popup, which is the thing this was supposed to avoid. A body class
+      // applies the moment Radix mounts the dialog, so there is no gap.
+      document.body.classList.add('ks-claiming');
+
+      btn.click();
+      _claimStage = 1;
+      _claimAt = Date.now();
+      // Drive the rest at 100ms, not on the 2s watchdog: the sooner Claim is
+      // clicked and the dialog closed, the shorter the page is held hostage by
+      // Radix's focus trap.
+      clearInterval(_claimTimer);
+      _claimTimer = setInterval(_autoClaimReward, 100);
+      return;
+    }
+  }
+
+  function _endClaim() {
+    clearInterval(_claimTimer);
+    _claimTimer = null;
+    document.body.classList.remove('ks-claiming');
+    _claimStage = 0;
+    _claimDlg = null;
+    _claimCta = null;
   }
 
   function _applyTimestamps(show) {
@@ -286,7 +500,9 @@
       // The mode bar lives in Kick's chat column and is destroyed by the same
       // React re-renders, so it needs the same watchdog.
       if (KS.Mirror && KS.Mirror.renderModeBar) KS.Mirror.renderModeBar();
+      _ensureChatObserved();
       _autoAcceptChatRules();
+      _autoClaimReward();
     }, 2000);
   }
 

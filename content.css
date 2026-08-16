@@ -83,6 +83,36 @@ body.ks-mirror-on [data-testid="chatroom-messages"] {
 .ks-mirror-hide:hover { opacity: 1; }
 .ks-mirror-dot { font-size: 10px; }
 
+/* Rolling-digit odometer for the filtered count. Each digit is a 1em window
+   onto a vertical 0-9 strip; only `transform` changes, so updates stay on the
+   compositor and never trigger layout — it ticks on every message. */
+.ks-odo {
+  display: inline-flex;
+  height: 1em;
+  overflow: hidden;
+  vertical-align: -0.12em;
+  font-variant-numeric: tabular-nums;
+}
+.ks-odo-digit {
+  width: 0.62em;
+  height: 1em;
+  overflow: hidden;
+}
+.ks-odo-strip {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+  transition: transform 420ms cubic-bezier(.2, .9, .2, 1);
+}
+.ks-odo-strip > span {
+  height: 1em;
+  line-height: 1em;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ks-odo-strip { transition: none; }
+}
+
 .ks-mirror-count {
   color: #8a8a93;
   flex: 1 1 auto;
@@ -134,6 +164,28 @@ body.ks-mirror-on [data-testid="chatroom-messages"] {
   transform: none !important;
   inset: auto !important;
   width: 100%;
+}
+
+/* Taken off-stage rather than hidden: kept laid out and interactive, just
+   invisible. Used for the daily-reward CTA and its dialog while they are
+   auto-claimed.
+
+   Deliberately NOT [data-ks-hidden] / display:none. Radix animates the dialog
+   and manages focus, and Kick's virtualiser already proved that removing an
+   element from layout changes how the framework behaves (a display:none chat
+   container has clientHeight 0 and renders nothing). Keeping it rendered means
+   the click path is the same one a user would take. */
+/* Applied for the moment a reward claim is in flight, so Kick's dialog is
+   invisible the instant Radix mounts it. Marking the element after it appeared
+   left it on screen until the next poll. */
+body.ks-claiming [role="dialog"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+[data-ks-offstage] {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Individual emotes hidden inside an otherwise visible message.

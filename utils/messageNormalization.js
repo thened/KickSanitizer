@@ -53,11 +53,52 @@ KS.Normalize = {
     return /^\s*!\w/.test(str);
   },
 
-  // True when the message contains a URL
+  // Undo the tricks people use to get a link past chat filters, so the link
+  // test below sees what a reader sees. Handles:
+  //   example dot com · example(dot)com · example[.]com · example . com
+  //   e x a m p l e . c o m · hxxp:// · zero-width characters
+  deobfuscateLink: function (str) {
+    let s = String(str || '').toLowerCase();
+
+    // Zero-width and soft hyphens — invisible, purely for evasion.
+    s = s.replace(/[​‌‍⁠﻿­]/g, '');
+
+    // hxxp / h**p style scheme mangling.
+    s = s.replace(/\bh[x*]{2}ps?\b/g, 'http');
+
+    // Characters spaced out one by one: "e x a m p l e" -> "example".
+    // Runs of 3+ single characters only, so ordinary prose survives. Done
+    // BEFORE the dot handling: collapsing dots first welds "e . c" into "e.c",
+    // which breaks the run and leaves a stranded "c o m".
+    const joinRuns = t => t.replace(/(?:\b\w\s+){2,}\b\w\b/g, m => m.replace(/\s+/g, ''));
+    s = joinRuns(s);
+
+    // "dot" spelled out, optionally bracketed.
+    s = s.replace(/\s*[([{]?\s*(?:dot|d0t)\s*[)\]}]?\s*/g, '.');
+
+    // Bracketed or spaced literal dots: example[.]com, example . com
+    s = s.replace(/\s*[([{]\s*\.\s*[)\]}]\s*/g, '.');
+    s = s.replace(/\s*\.\s*/g, '.');
+
+    // Again: the dot pass can expose a new run ("scamsite.c o m").
+    s = joinRuns(s);
+
+    return s;
+  },
+
+  // True when the message contains a URL — including one broken up to evade
+  // this check. Kick chat is full of "site dot com" precisely because a naive
+  // link filter only looks for the literal form.
   containsLink: function (str) {
     if (!str) return false;
-    return /(?:https?:\/\/|www\.)\S+/.test(str) ||
+    const direct = /(?:https?:\/\/|www\.)\S+/.test(str) ||
       /\b\S+\.(?:com|net|org|io|tv|gg|me|xyz|live|co|uk|stream)\b/i.test(str);
+    if (direct) return true;
+
+    const clean = this.deobfuscateLink(str);
+    if (clean === String(str || '').toLowerCase()) return false;  // nothing changed
+    return /(?:https?:\/\/|www\.)\S+/.test(clean) ||
+      /\b[\w-]+\.(?:com|net|org|io|tv|gg|me|xyz|live|co|uk|stream)\b/i.test(clean);
   },
 
   // Bigram-based similarity score (0–1)

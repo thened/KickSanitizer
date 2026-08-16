@@ -278,21 +278,29 @@ KS.PageFilters = (function () {
 
   // ── Handle new DOM additions ───────────────────────────────────────────────
 
+  // Page furniture changes rarely; chat messages arrive constantly. Doing a
+  // full filter pass per added node was the extension's dominant CPU cost.
+  //
+  // Measured on a live Kick page: filter.find() is document-wide, and the
+  // heading-based lookups inside it enumerate every h1-h6/p/span/button on the
+  // page (435 elements even on an idle one), six times — ~2.7 ms PER NODE,
+  // against 0.041 ms for the entire per-message path. It also degrades as it
+  // runs: every message adds spans, growing the set each later node scans.
+  //
+  // One coalesced pass instead. A sidebar tile appearing 400 ms later than it
+  // could have is imperceptible; a browser pegged at 100% is not.
+  const SCAN_DEBOUNCE_MS = 400;
+  let _scanPending = null;
+
   function handleAddedNode(node) {
     if (!_settings || !_settings.enabled) return;
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
-    // Re-run all active page filters against the new subtree
-    for (const filter of FILTERS) {
-      if (!_settings[filter.key]) continue;
-      try {
-        const candidates = filter.find().filter(el => node === el || node.contains(el) || el.contains(node));
-        for (const el of candidates) {
-          if (_isSafeToHide(el)) _hideEl(el, filter.reason);
-        }
-      } catch (_) { }
-    }
-    // Check new sidebar tiles for blocklist
-    _applyChannelBlocklist(_settings);
+    if (_scanPending) return;                 // a pass is already queued
+    _scanPending = setTimeout(() => {
+      _scanPending = null;
+      try { scan(document.body); } catch (_) { }
+      _applyChannelBlocklist(_settings);
+    }, SCAN_DEBOUNCE_MS);
   }
 
   function scan(root) {
