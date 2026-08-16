@@ -738,6 +738,46 @@ KS.Mirror = (function () {
     }
   }
 
+  // Give every id inside a cloned SVG a fresh name.
+  //
+  // Kick's VIP and Moderator badges fill from a gradient referenced by id
+  // (fill="url(#ModeratorBadge__a)"). Cloning the row duplicates that id, and
+  // url(#...) resolves to the FIRST match in document order — Kick's own row,
+  // which sits before the mirror in the DOM. So the clone's badge was painted
+  // from a definition it did not own, and the moment the virtualiser recycled
+  // that row the reference dangled and the badge rendered transparent. Badges
+  // with a flat fill or an <img> were never affected, which is why only some
+  // of them disappeared, and why they came back whenever a re-render recreated
+  // the original.
+  let _svgIdSeq = 0;
+
+  function _uniquifySvgIds(root) {
+    for (const svg of root.querySelectorAll('svg')) {
+      const ided = svg.querySelectorAll('[id]');
+      if (!ided.length) continue;
+
+      const renamed = new Map();
+      for (const el of ided) {
+        if (!el.id || renamed.has(el.id)) continue;
+        const fresh = el.id + '--ks' + (++_svgIdSeq);
+        renamed.set(el.id, fresh);
+        el.id = fresh;
+      }
+
+      for (const el of svg.querySelectorAll('*')) {
+        for (const attr of el.attributes) {
+          if (attr.value.indexOf('url(#') !== -1) {
+            attr.value = attr.value.replace(/url\(#([^)]+)\)/g,
+              (whole, id) => renamed.has(id) ? 'url(#' + renamed.get(id) + ')' : whole);
+          } else if (attr.value.charAt(0) === '#' && renamed.has(attr.value.slice(1))) {
+            // <use href="#id"> and its xlink: form.
+            attr.value = '#' + renamed.get(attr.value.slice(1));
+          }
+        }
+      }
+    }
+  }
+
   const BADGE_SEL = '[data-testid^="identity-badge-"], img[src*="/chat/badges/"]';
 
   // The outermost wrapper that holds badges and nothing else. Found by climbing
@@ -774,6 +814,7 @@ KS.Mirror = (function () {
         const srcBox = _badgeBox(src);
         if (!srcBox) return;
         const copy = srcBox.cloneNode(true);
+        _uniquifySvgIds(copy);
         const dstBox = _badgeBox(clone);
         if (dstBox) {
           dstBox.replaceWith(copy);
@@ -842,6 +883,10 @@ KS.Mirror = (function () {
     delete clone.dataset.ksMirrored;
     delete clone.dataset.ksSeen;
     clone.classList.add('ks-mirror-row');
+    // Before anything else touches the clone: its SVG ids currently collide
+    // with the original's, and the badges paint from the wrong ones until this
+    // runs.
+    _uniquifySvgIds(clone);
 
     // Strip Kick's per-message action controls (delete / timeout / ban / pin,
     // and the reply affordance). They are icon-only buttons; a username is a
