@@ -147,6 +147,16 @@ KS.Mirror = (function () {
     return (username || '').toLowerCase() + '|' + (text || '').trim().slice(0, 120);
   }
 
+  // The socket tap feeds two things now: the id buffer the mirror uses to
+  // attach ids to rows, and the filtered-count tally, which has to live here
+  // because only the socket has a stable per-message identity.
+  function _onSocketMessage(msg) {
+    _rememberId(msg);
+    if (KS.ChatFilters && KS.ChatFilters.countSocketMessage) {
+      KS.ChatFilters.countSocketMessage(msg);
+    }
+  }
+
   function _rememberId(msg) {
     if (!msg || !msg.id) return;
     _pendingIds.set(_key(msg.username, msg.content), { id: msg.id, t: Date.now() });
@@ -364,16 +374,40 @@ KS.Mirror = (function () {
     const note = parent ? parent.querySelector('.ks-mirror-modnotice') : null;
     const noteH = note ? Math.ceil(note.getBoundingClientRect().height) : 0;
 
-    // Anything Kick stacks above the list (pinned message) pushes us down with
-    // it, rather than being covered by us or covering us.
+    // Anything Kick stacks above the list pushes us down with it, rather than
+    // being covered by us or covering us. Each of these is an absolutely
+    // positioned overlay in the chat column, so none of them affect our layout
+    // on their own — the space has to be measured and reserved.
+    //
+    // A new overlay is one entry here. Matched on the innermost identifiable
+    // element and then walked out to its wrapper, because the wrappers carry no
+    // testid of their own.
+    const OVERLAYS = [
+      '[data-testid^="pinned-message"]',
+      '[data-testid="poll-title"]',            // also covers ended polls
+      '[data-testid="poll-expand-collapse-button"]',
+    ];
+
     let pinnedH = 0;
     if (parent) {
-      const pinned = parent.querySelector('[data-testid^="pinned-message"]');
-      if (pinned && !pinned.dataset.ksHidden) {
-        const pr = pinned.getBoundingClientRect();
-        const cr = parent.getBoundingClientRect();
-        if (pr.height && pr.bottom > cr.top) {
-          pinnedH = Math.ceil(Math.min(pr.bottom - cr.top, cr.height * 0.6));
+      const cr = parent.getBoundingClientRect();
+      for (const sel of OVERLAYS) {
+        for (const found of parent.querySelectorAll(sel)) {
+          if (found.dataset && found.dataset.ksHidden) continue;
+
+          // Out to the direct child of the chat column, so padding on the
+          // wrapper is included rather than clipped to the inner card.
+          let box = found;
+          while (box.parentElement && box.parentElement !== parent) box = box.parentElement;
+          if (!box.parentElement) continue;      // not inside the column after all
+          if (box === _bar || box === _host) continue;   // ours, not Kick's
+
+          const pr = box.getBoundingClientRect();
+          if (!pr.height || pr.bottom <= cr.top) continue;
+          // Capped: an overlay taller than 60% of the column would leave the
+          // list unusable, and at that point covering it is the lesser evil.
+          pinnedH = Math.max(pinnedH,
+            Math.ceil(Math.min(pr.bottom - cr.top, cr.height * 0.6)));
         }
       }
     }
@@ -417,6 +451,11 @@ KS.Mirror = (function () {
     if (_barMode === (on ? 'clean' : 'kick')) {
       _updateCount();
       _updateChatters();
+      // Overlays come and go on Kick's schedule, not ours — a poll opening
+      // mid-session used to sit on top of the bar because layout was only ever
+      // recalculated when the bar itself was rebuilt. This runs on the 2s
+      // watchdog; a few getBoundingClientRect reads at that rate cost nothing.
+      _layout();
       return;
     }
     _barMode = on ? 'clean' : 'kick';
@@ -668,6 +707,11 @@ KS.Mirror = (function () {
     const s = raw.padStart(Math.max(ODO_DIGITS, raw.length), '0');
 
     // Rebuild only when the number of digits changes (9 -> 10, 99 -> 100).
+    //
+    // Each strip carries TWO cycles of 0-9. A real odometer only ever turns one
+    // way, and with a single cycle the 9 -> 0 rollover had to travel back up the
+    // strip, so the drum visibly span backwards on every tenth tick. With a
+    // second cycle below, 9 -> 0 keeps going in the same direction.
     if (host.childElementCount !== s.length) {
       host.innerHTML = '';
       for (let i = 0; i < s.length; i++) {
@@ -675,11 +719,15 @@ KS.Mirror = (function () {
         digit.className = 'ks-odo-digit';
         const strip = document.createElement('span');
         strip.className = 'ks-odo-strip';
-        for (let d = 0; d <= 9; d++) {
-          const cell = document.createElement('span');
-          cell.textContent = String(d);
-          strip.appendChild(cell);
+        for (let cycle = 0; cycle < 2; cycle++) {
+          for (let d = 0; d <= 9; d++) {
+            const cell = document.createElement('span');
+            cell.textContent = String(d);
+            strip.appendChild(cell);
+          }
         }
+        strip.dataset.d = '0';
+        strip.dataset.pos = '0';
         digit.appendChild(strip);
         host.appendChild(digit);
       }
@@ -687,13 +735,47 @@ KS.Mirror = (function () {
 
     for (let i = 0; i < s.length; i++) {
       const strip = host.children[i].firstElementChild;
-      const d = Number(s[i]);
-      if (strip.dataset.d === String(d)) continue;   // already showing it
-      strip.dataset.d = String(d);
+      const next = Number(s[i]);
+      const cur = Number(strip.dataset.d);
+      if (cur === next) continue;                    // already showing it
+
+      // Always forwards. 9 -> 0 is a step of one, not a step of minus nine.
+      const delta = (next - cur + 10) % 10;
+      const pos = Number(strip.dataset.pos) + delta;
+      strip.dataset.d = String(next);
+      strip.dataset.pos = String(pos);
       // Must match .ks-odo-strip > span height in content.css, or the digits
       // drift out of register as the number climbs.
-      strip.style.transform = `translateY(${-d * ODO_CELL_EM}em)`;
+      strip.style.transform = `translateY(${-pos * ODO_CELL_EM}em)`;
+      if (pos >= 10) _rewindStrip(strip, pos);
     }
+  }
+
+  // Once a strip has travelled into its second cycle, snap it back by exactly
+  // one cycle with the transition off. The cells repeat, so the digit on screen
+  // is identical before and after — nothing moves visibly, and the strip has
+  // room to keep turning the same way forever.
+  //
+  // Deferred until the animation has finished, or it would cut the roll short.
+  // transitionend does not fire under prefers-reduced-motion (there is no
+  // transition), hence the timer as well; whichever arrives first wins.
+  function _rewindStrip(strip, pos) {
+    let done = false;
+    const rewind = () => {
+      if (done) return;
+      done = true;
+      strip.removeEventListener('transitionend', rewind);
+      // A newer update may have moved it on already; leave that one alone.
+      if (Number(strip.dataset.pos) !== pos) return;
+      const back = pos - 10;
+      strip.style.transition = 'none';
+      strip.style.transform = `translateY(${-back * ODO_CELL_EM}em)`;
+      strip.dataset.pos = String(back);
+      void strip.offsetHeight;        // flush, so the next change animates again
+      strip.style.transition = '';
+    };
+    strip.addEventListener('transitionend', rewind);
+    setTimeout(rewind, 700);
   }
 
   function switchToKickChat() { _setMirror(false); }
@@ -766,7 +848,7 @@ KS.Mirror = (function () {
     if (KS.ChatSocket && KS.Sel.getCurrentChannel) {
       const slug = KS.Sel.getCurrentChannel();
       if (slug) KS.ChatSocket.connect(slug, {
-        message: _rememberId,
+        message: _onSocketMessage,
         deleted: _onDeleted,
         banned: _onBanned,
         cleared: _onCleared,

@@ -593,25 +593,104 @@ KS.ChatFilters = (function () {
   // channel changes. It is the "message id" this counter was always meant to
   // key on. The old composite stays as a fallback for rows rendered outside a
   // [data-index] wrapper.
-  // Paired with the text rather than used alone: if Kick ever trims its message
-  // array the virtualiser would reuse low indices for new messages, and an
-  // index on its own would then read as already-counted. The same message
-  // re-rendered yields the same pair; a reused index carrying different text
-  // does not.
+  // data-index was tried here and is WRONG. It is the row's position in Kick's
+  // list, not an identifier for the message: as the list scrolls, entries leave
+  // the top and every remaining message's index shifts. So the same message
+  // gets a new index over time, and each time the virtualiser recreates its row
+  // it produced a fresh key and counted again — the number climbed without
+  // bound. Over-counting is worse than under-counting, so this is back to the
+  // composite, whose flaw is at least bounded and in the safe direction.
+  //
+  // Kick puts no message id in the DOM. The only true id comes over the socket,
+  // which is where a correct fix has to come from.
   function _messageIdentity(el) {
-    const wrap = el.closest ? el.closest('[data-index]') : null;
-    const idx = wrap && wrap.dataset ? wrap.dataset.index : null;
-    if (idx !== null && idx !== undefined && idx !== '') {
-      return 'i' + idx + '|' + (getMessageText(el) || '').slice(0, 60);
-    }
-
     const user = getUsername(el) || '';
     const text = getMessageText(el) || '';
     const time = (el.querySelector('span.text-neutral')?.textContent || '').trim();
     return (user || text) ? user + '|' + time + '|' + text.slice(0, 160) : '';
   }
 
-  function filteredCount() { return _filteredTotal; }
+  // ── Counting, from the socket ──────────────────────────────────────────────
+  //
+  // The DOM cannot answer "how many messages were filtered". Once the
+  // virtualiser recreates a row, nothing in it distinguishes "this message
+  // again" from "an identical message sent again" — so any DOM-side identity
+  // either merges duplicates (under-counts) or recounts re-renders (climbs
+  // without bound). Both were shipped and both were wrong.
+  //
+  // The socket has a real id per message, so counting there is exact and the
+  // virtualiser becomes irrelevant. The DOM path still does the hiding; it just
+  // stopped being what counts.
+  //
+  // Deliberately chat messages only. Notices arrive as their own event types and
+  // are a rounding error next to duplicate and emote spam.
+  const _sockCounted = new Set();     // message ids already counted
+  const _sockDupe = new Map();        // user|text -> last seen ms, own state
+  let _sockTotal = 0;
+  let _sockSeen = 0;                  // messages observed, to detect a dead tap
+
+  // Kick embeds emotes in the message text. The exact markup is NOT confirmed
+  // against a live payload, so a non-match degrades to "this is ordinary text",
+  // which under-counts rather than counting the wrong thing.
+  const EMOTE_RE = /\[emote:\d+:[^\]]*\]/g;
+
+  function _sockIsFiltered(username, content, s) {
+    const raw = String(content || '');
+    const emotes = (raw.match(EMOTE_RE) || []).length;
+    const text = raw.replace(EMOTE_RE, ' ').replace(/\s+/g, ' ').trim();
+    const user = String(username || '').toLowerCase();
+
+    // A message that mentions you is never filtered, whatever else it trips —
+    // must match the DOM path or the count would disagree with the screen.
+    if (s.chat_neverFilterMentions !== false && _mentionsMe(raw)) return false;
+
+    if (s.chat_hideEmoteOnly && ((emotes > 0 && !text) || KS.Normalize.isEmojiOnly(text))) return true;
+    if (s.chat_maxEmotes > 0 && emotes > s.chat_maxEmotes) return true;
+    if (s.chat_hideBotCommands && KS.Normalize.isBotCommand(text)) return true;
+    if (s.chat_hideBotResponses && KS.Sel.knownChatBots
+        && KS.Sel.knownChatBots.some(b => String(b).toLowerCase() === user)) return true;
+    if (s.chat_hideAllCaps && KS.Normalize.isAllCaps(text)) return true;
+    if (s.chat_hideRepeatedChars && KS.Normalize.isRepeatedChars(text)) return true;
+    if (s.chat_hideLinks && KS.Normalize.containsLink(text)) return true;
+    if (s.chat_minMessageLength > 0 && text.length > 0
+        && text.length < s.chat_minMessageLength) return true;
+
+    if (s.chat_hideDuplicates && text) {
+      // Its own history, not _dupeHistory: sharing would have each path
+      // recording the other's messages and shrinking the window for both.
+      const key = user + '|' + KS.Normalize.text(text);
+      const now = Date.now();
+      const last = _sockDupe.get(key);
+      const windowMs = (s.chat_duplicateWindowSeconds || 300) * 1000;
+      _sockDupe.set(key, now);
+      if (_sockDupe.size > 4000) {
+        const cutoff = now - windowMs;
+        for (const [k, t] of _sockDupe) if (t < cutoff) _sockDupe.delete(k);
+      }
+      if (last !== undefined && now - last <= windowMs) return true;
+    }
+    return false;
+  }
+
+  // Called for every chat message the socket delivers.
+  function countSocketMessage(msg) {
+    if (!msg || !msg.id || !_settings || !_settings.enabled) return;
+    if (_sockCounted.has(msg.id)) return;      // the whole point: ids are unique
+    _sockCounted.add(msg.id);
+    _sockSeen++;
+    if (_sockCounted.size > 20000) {
+      const oldest = _sockCounted.values().next().value;
+      if (oldest !== undefined) _sockCounted.delete(oldest);
+    }
+    try {
+      if (_sockIsFiltered(msg.username, msg.content, _settings)) _sockTotal++;
+    } catch (_) { /* never let counting break the message path */ }
+  }
+
+  // Prefer the socket, which is exact. Fall back to the DOM tally only when the
+  // tap has produced nothing — a socket that failed to connect should not leave
+  // the readout stuck at zero while messages visibly vanish.
+  function filteredCount() { return _sockSeen ? _sockTotal : _filteredTotal; }
 
   function _hide(el, reason) {
     // Count only the not-hidden -> hidden transition; processMessage can be
@@ -692,6 +771,10 @@ KS.ChatFilters = (function () {
     _filteredKeys.clear();
     _filteredOrder.length = 0;
     _filteredTotal = 0;
+    _sockCounted.clear();
+    _sockDupe.clear();
+    _sockTotal = 0;
+    _sockSeen = 0;
   }
 
   // ── Scan existing DOM ──────────────────────────────────────────────────────
@@ -784,6 +867,7 @@ KS.ChatFilters = (function () {
     _isEmoteOnly,
     filteredCount,
     setViewer,
+    countSocketMessage,
     _mentionsMe,
     _isKicksNotice,
     _getKicksAmount,
