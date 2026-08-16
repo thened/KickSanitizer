@@ -28,12 +28,36 @@ say what a product works with is permitted; using it as your own name is not.
 Worth doing before committing to it: search the Web Store for existing
 extensions called Matcha. A clash is not fatal but is worth knowing about.
 
-The GitHub repo should be renamed too, not just the extension. The listing
-links the source, and linking it is worth doing — open source helps review. A
-reviewer following that link to a repo still called "KickSanitizer" sees the
-brand name that was just removed from the title, which reads as an attempt to
-route around them. GitHub redirects the old URL indefinitely, so nothing
-breaks; only the local `git remote set-url` needs updating.
+Two repos: this one stays as the development repo under its current name, and
+the submitted version gets a new public repo named `matcha`. That keeps the dev
+history out of the public one and gives the new name a clean start.
+
+The risk that has to be managed is drift. The listing links the public repo as
+the extension's source, so if fixes land here and not there, the linked "source"
+quietly stops matching what people installed — worse than not linking it at all.
+
+Guard: never author anything in the public repo. `build.py` already emits the
+exact shipped file set, so releasing is mechanical — build, copy `dist/` over,
+commit, tag with the version. Nothing is written there by hand, so it cannot
+fall behind except by not releasing, which is visible.
+
+### If features have to be removed for review
+
+Two features act on the user's account and are the plausible objections:
+`page_autoAcceptChatRules` (clicks "I agree" on a channel's chat rules) and
+`page_autoClaimRewards` (claims the daily reward). Both default to off.
+
+**Do not strip them before the first submission.** Defaulting off plus the
+justifications in §3 is usually sufficient, rejection costs only a resubmission,
+and removing them preemptively takes real functionality from users to avoid an
+objection that may never come.
+
+If a reviewer does object, do it as a `store` branch off `main` whose entire
+diff is the removals — merge `main` into it each release, build from it, publish
+the output. Note that review reads the code, not just the UI: hiding the popup
+rows is not removal, the functions have to go. Keeping this as a branch means
+the removals stay one small reviewable diff rather than two codebases that
+diverge, and `main` remains the only place anything is authored.
 
 Renaming touches more than the manifest — repo name, README, the `KS`/
 `KickSanitizer` identifiers in code, the built zip name, and the icon, which
