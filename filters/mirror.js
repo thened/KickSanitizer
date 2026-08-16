@@ -1215,6 +1215,7 @@ KS.Mirror = (function () {
     _prune();
     _updateCount();
     if (stick) _scrollToBottom();
+    _pinThroughImageLoads(clone);
   }
 
   function _prune() {
@@ -1233,19 +1234,46 @@ KS.Mirror = (function () {
 
   // ── Scrolling ──────────────────────────────────────────────────────────────
 
+  function _distFromBottom() {
+    return _host ? _host.scrollHeight - _host.scrollTop - _host.clientHeight : 0;
+  }
+
   function _onScroll() {
     if (!_host) return;
     const wasStuck = _stick;
-    const dist0 = _host.scrollHeight - _host.scrollTop - _host.clientHeight;
-    // Returning to the bottom releases the deferred pruning above.
-    if (!wasStuck && dist0 <= STICK_PX) { _stick = true; _prune(); }
-    const dist = _host.scrollHeight - _host.scrollTop - _host.clientHeight;
-    _stick = dist <= STICK_PX;
+    _stick = _distFromBottom() <= STICK_PX;
+    // Returning to the bottom releases the pruning deferred while scrolled up.
+    if (!wasStuck && _stick) _prune();
   }
 
   function _scrollToBottom() {
     if (!_host) return;
     _host.scrollTop = _host.scrollHeight;
+    // Pin again once layout has settled. Setting scrollTop reads the height as
+    // it is RIGHT NOW, and a row that has just been inserted is not finished:
+    // its emotes and badges are images with no intrinsic size yet, so the row
+    // grows a moment later and leaves the view a little short of the bottom.
+    requestAnimationFrame(() => {
+      if (_stick && _host) _host.scrollTop = _host.scrollHeight;
+    });
+  }
+
+  // Images finish loading on their own schedule — well after the frame above.
+  // Each one that lands grows its row, so re-pin as they arrive rather than
+  // drifting further from the bottom with every emote in a busy chat.
+  //
+  // Listeners are per image and fire once, so they cost nothing after load and
+  // cannot accumulate. Only images that are not already complete are watched.
+  function _pinThroughImageLoads(row) {
+    for (const img of row.querySelectorAll('img')) {
+      if (img.complete) continue;
+      img.addEventListener('load', _repinIfStuck, { once: true });
+      img.addEventListener('error', _repinIfStuck, { once: true });
+    }
+  }
+
+  function _repinIfStuck() {
+    if (_stick && _host && _host.isConnected) _host.scrollTop = _host.scrollHeight;
   }
 
   // ── Click forwarding ───────────────────────────────────────────────────────

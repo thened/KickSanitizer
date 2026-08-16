@@ -10,6 +10,7 @@
     chat_duplicateWindowSeconds: 300,
     chat_similarityMode: 'normalized',
     chat_hideEmoteOnly: true,
+    chat_mizkifMode: false,
     chat_maxEmotes: 0,
     chat_collapseGlobalCopypasta: false,
     chat_copypastaThreshold: 5,

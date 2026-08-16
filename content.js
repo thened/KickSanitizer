@@ -745,6 +745,8 @@
         mirrorRows: document.querySelectorAll('#ks-mirror .ks-mirror-row').length,
         channel: _currentChannel || null,
         navs: _navCount,
+        viewers: (KS.PageFilters && KS.PageFilters.viewerStats)
+          ? KS.PageFilters.viewerStats() : null,
         at: new Date().toLocaleTimeString(),   // so a stale read is obvious
         errors: Object.keys(_watchErrors).length ? _watchErrors : null,
         sock: (KS.ChatSocket && KS.ChatSocket.stats) ? KS.ChatSocket.stats() : null,
@@ -892,6 +894,10 @@
       <div class="ks-panel-row">
         <label for="ks-p-mirror">Clean chat mode</label>
         <button class="ks-toggle" id="ks-p-mirror" data-key="chat_mirrorMode"></button>
+      </div>
+      <div class="ks-panel-row">
+        <label for="ks-p-mizkif" title="Emotes only — every message with words in it is hidden">Mizkif mode</label>
+        <button class="ks-toggle" id="ks-p-mizkif" data-key="chat_mizkifMode"></button>
       </div>
       <div class="ks-panel-actions">
         <button class="ks-action-btn" id="ks-p-reveal">Temporarily reveal all hidden</button>

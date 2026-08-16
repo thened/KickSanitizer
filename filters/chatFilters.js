@@ -134,6 +134,23 @@ KS.ChatFilters = (function () {
       return;
     }
 
+    // Mizkif mode: emotes only, everything else gone.
+    //
+    // Placed here so it wins over every other filter — there is no point asking
+    // whether a message is a duplicate or too short when the answer is "it has
+    // words in it". Notice cards go too: a gifted-sub card is not an emote.
+    //
+    // Survivors short-circuit straight to the mirror rather than falling
+    // through. They have to: chat_hideEmoteOnly defaults to ON, so continuing
+    // would hand every surviving message to the one filter guaranteed to hide
+    // it, and the mode emptied chat completely instead of showing emotes. The
+    // emote-stripping options would finish the job on anything left.
+    if (s.chat_mizkifMode) {
+      if (!isEmoteOnly(msgEl)) return _hide(msgEl, 'mizkif');
+      if (window.KS && KS.Mirror) KS.Mirror.ingest(msgEl);
+      return;
+    }
+
     // Kicks notices (filter by amount before other checks)
     if (s.chat_kicksMinAmount > 0 && _isKicksNotice(msgEl)) {
       const amount = _getKicksAmount(msgEl);

@@ -205,6 +205,14 @@ KS.PageFilters = (function () {
   const VIEWERS_STAGGER_MS = 250;
 
   const _viewerCounts = new Map();   // slug -> formatted string
+
+  // Diagnostics, surfaced through ksDebug. This feature fails OPEN by design —
+  // an unrecognised response leaves the badge reading LIVE — which means a
+  // wrong guess about the field name is indistinguishable from "nothing
+  // happened". Recording what it actually saw is the only way to tell those
+  // apart without guessing again. `keys` is the field names of the response,
+  // not the values: it answers "what is the count called" directly.
+  const _viewerDiag = { tried: 0, ok: 0, failed: 0, keys: null };
   let _viewersTimer = null;
   let _viewersBusy = false;
 
@@ -241,13 +249,21 @@ KS.PageFilters = (function () {
     if (_viewersBusy) return;
     if (!_settings || !_settings.enabled || !_settings.page_forceViewerCount) return;
 
+    // EVERY live channel, not just the ones reading "LIVE".
+    //
+    // This used to skip any badge already showing a number, assuming Kick's was
+    // fresher than anything we could fetch. Measured against the API, Kick's
+    // sidebar figures are badly stale — one channel displayed 1 while the API
+    // reported 303, another 8.5K against 12,293. Ours is at most ten minutes
+    // old, which is better, and a feature called "force viewer count" that left
+    // seventeen of twenty channels untouched was not doing what it says.
+    //
+    // Deduped by slug: the same channel appears in both the following and
+    // recommended lists, so it would otherwise be fetched twice.
     const slugs = [];
     for (const badge of _liveBadges()) {
       const slug = _slugFor(badge);
-      // Only channels showing LIVE. One that already displays a number needs no
-      // lookup, and asking for it would be traffic for nothing.
-      if (slug && (badge.textContent || '').trim().toUpperCase() === 'LIVE'
-          && !slugs.includes(slug)) slugs.push(slug);
+      if (slug && !slugs.includes(slug)) slugs.push(slug);
     }
     if (!slugs.length) return;
 
@@ -257,10 +273,19 @@ KS.PageFilters = (function () {
         try {
           const r = await fetch('/api/v2/channels/' + encodeURIComponent(slug),
                                 { headers: { Accept: 'application/json' } });
+          _viewerDiag.tried++;
           if (r.ok) {
-            const n = _extractViewers(await r.json());
-            const text = _formatViewers(n);
-            if (text) _viewerCounts.set(slug, text);
+            const data = await r.json();
+            if (!_viewerDiag.keys) {
+              const ls = (data && (data.livestream || data.livestream_data)) || null;
+              _viewerDiag.keys = ls && typeof ls === 'object'
+                ? Object.keys(ls).slice(0, 30) : 'no livestream object';
+            }
+            const text = _formatViewers(_extractViewers(data));
+            if (text) { _viewerCounts.set(slug, text); _viewerDiag.ok++; }
+            else _viewerDiag.failed++;
+          } else {
+            _viewerDiag.failed++;
           }
         } catch (_) { /* one channel failing must not stop the rest */ }
         // Spaced out rather than fired as a burst — a dozen simultaneous
@@ -282,14 +307,32 @@ KS.PageFilters = (function () {
       if (!on) { delete badge.dataset.ksViewers; continue; }
       const slug = _slugFor(badge);
       const text = slug && _viewerCounts.get(slug);
-      // Only override the word LIVE. If Kick is already showing a number, that
-      // number is fresher than ours and must not be replaced by a stale one.
-      if (text && (badge.textContent || '').trim().toUpperCase() === 'LIVE') {
+      // Applied whatever the badge currently reads. See _refreshViewerCounts:
+      // Kick's own numbers are the stale ones.
+      if (text) {
         badge.dataset.ksViewers = text;
+        // A real count outranks LAME, and the two must never both be set: they
+        // draw through the same ::after. LAME already refuses to claim a badge
+        // that has a count, but it can have claimed one BEFORE the first lookup
+        // returned — this clears that, rather than leaving it until the next
+        // scan to notice.
+        delete badge.dataset.ksLame;
       } else {
         delete badge.dataset.ksViewers;
       }
     }
+  }
+
+  function viewerStats() {
+    return {
+      on: !!(_settings && _settings.page_forceViewerCount),
+      tried: _viewerDiag.tried,
+      ok: _viewerDiag.ok,
+      failed: _viewerDiag.failed,
+      cached: _viewerCounts.size,
+      shown: document.querySelectorAll('[data-ks-viewers]').length,
+      keys: _viewerDiag.keys,
+    };
   }
 
   function _syncViewerTimer() {
@@ -514,5 +557,6 @@ KS.PageFilters = (function () {
     scan,
     handleAddedNode,
     restoreAll,
+    viewerStats,
   };
 }());

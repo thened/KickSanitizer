@@ -11,6 +11,10 @@ KS.DEFAULT_SETTINGS = {
   chat_duplicateWindowSeconds: 300,   // 10 | 30 | 60 | 300 | 900 | 1800 | 3600
   chat_similarityMode: 'normalized',  // 'exact' | 'normalized'
   chat_hideEmoteOnly: true,
+  // The inverse of chat_hideEmoteOnly: keep ONLY emote-only messages. A joke,
+  // and a total one — it overrides every other chat filter, which is why it
+  // sits at the top of the popup rather than among the emote options.
+  chat_mizkifMode: false,
   chat_maxEmotes: 0,                  // 0 = disabled; N = hide if more than N emotes
   // Clean chat is the default: filtering in place leaves unclosable gaps in
   // Kick's virtualised list, so the mirror is the mode the extension is for.
