@@ -15,6 +15,11 @@ Thumbs.db
 desktop.ini
 .DS_Store
 
+# Test harness — development only, never part of a release
+tests/
+capture-server.py
+capture-sniffer.js
+
 # Scratch
 *.b64
 *.log
