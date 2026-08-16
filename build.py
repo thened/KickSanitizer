@@ -41,7 +41,7 @@ SHIP_FILES = [
 ]
 
 # Present in the repo, never in the zip. Listed so the intent is explicit.
-DEV_ONLY = ["CLAUDE.md", "captures/", "tests/", "capture-server.py",
+DEV_ONLY = ["CLAUDE.md", "DEVELOPMENT.md", "STORE.md", "captures/", "tests/", "capture-server.py",
             "capture-sniffer.js", "build.py", ".claude/", "icons/*.svg"]
 
 
