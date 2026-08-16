@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "KickSanitizer",
-  "short_name": "KickSanitizer",
+  "name": "Matcha Filter",
+  "short_name": "Matcha",
   "version": "1.0",
-  "description": "Clean up Kick. Keep what you came for.",
+  "description": "Filter Kick chat: hide spam, duplicates, emote walls and bot games, or read a clean rebuilt chat with themes.",
   "permissions": [
     "storage"
   ],
@@ -17,7 +17,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "KickSanitizer"
+    "default_title": "Matcha Filter"
   },
   "icons": {
     "16": "icons/icon16.png",

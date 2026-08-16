@@ -11,25 +11,26 @@ Chrome Web Store policy prohibits listings that imply affiliation with another
 brand. Any name containing "Kick" alongside a `kick.com` host permission is the
 shape reviewers flag, and it was the most likely rejection reason here.
 
-**Decision: "Matcha".** Green tea as a nod to Kick being the green one, with no
+**Decision: "Matcha Filter".** Green tea as a nod to Kick being the green one, with no
 brand name in the title at all — so the affiliation question never arises rather
 than being argued down. It also survives Kick rebranding, or the extension being
 pointed somewhere else later.
 
-Spelling: **Matcha**, not Macha. It is the standard transliteration and the one
-people actually type.
+Spelling: **Matcha**, not Macha — the standard transliteration and the one
+people actually type. Keeping "Filter" in the name carries the single-purpose
+statement into the title, which helps both review and search.
 
-The cost is discoverability — nobody searches "Matcha" looking for a chat
-filter. That is handled in the listing rather than the name: the Store indexes
+The cost is discoverability — nobody searches "Matcha" looking for a Kick
+extension. That is handled in the listing rather than the name: the Store indexes
 the description, so "Kick" appears in the first line of the short description
 and again in the first sentence of the long one. Descriptive use of a brand to
 say what a product works with is permitted; using it as your own name is not.
 
 Worth doing before committing to it: search the Web Store for existing
-extensions called Matcha. A clash is not fatal but is worth knowing about.
+extensions called Matcha Filter. A clash is not fatal but is worth knowing about.
 
 Two repos: this one stays as the development repo under its current name, and
-the submitted version gets a new public repo named `matcha`. That keeps the dev
+the submitted version gets a new public repo named `matcha-filter`. That keeps the dev
 history out of the public one and gives the new name a clean start.
 
 The risk that has to be managed is drift. The listing links the public repo as
@@ -77,8 +78,8 @@ Filter Kick chat: hide spam, duplicates, emote walls and bot games, or read a cl
 ### Detailed description
 
 ```
-Kick chat moves fast and most of it is noise. Matcha filters it down to the messages
-you actually came for.
+Kick chat moves fast and most of it is noise. Matcha Filter cuts it down to the
+messages you actually came for.
 
 WHAT IT FILTERS
 
@@ -96,7 +97,7 @@ Messages that @-mention you are never filtered, whatever else they would trip.
 CLEAN CHAT MODE
 
 Kick's chat is a virtualised list: hiding a message leaves a gap that cannot be
-closed. So instead of cutting holes in their chat, Matcha rebuilds the
+closed. So instead of cutting holes in their chat, Matcha Filter rebuilds the
 surviving messages in a list of its own. Kick's chat is never modified — it is
 only read.
 
@@ -123,7 +124,7 @@ Chrome's own sync, if you have it enabled.
 
 Runs only on kick.com. Does not run on dashboard.kick.com.
 
-Open source: https://github.com/thened/matcha
+Open source: https://github.com/thened/matcha-filter
 
 Not affiliated with, endorsed by, or connected to Kick.com. "Kick" is used only
 to describe what this extension works with.
@@ -214,7 +215,7 @@ Also needed: a 440×280 small promo tile. The 128px icon already exists.
 
 ## 6. Before submitting
 
-- [ ] Rename to Matcha (§1): `manifest.json`, README, repo, icon
+- [ ] Rename to Matcha Filter (§1): `manifest.json`, README, repo, icon
 - [ ] Bump version — `python build.py --bump minor`
 - [ ] `python build.py`, then **load `dist/kicksanitizer-<version>/` unpacked and
       click through it**. Source and package are not the same thing: the popup
