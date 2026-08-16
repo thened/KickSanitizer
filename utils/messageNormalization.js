@@ -24,6 +24,30 @@ KS.Normalize = {
     return this.text(a) === this.text(b);
   },
 
+  // True when the string is nothing but Unicode emoji and whitespace.
+  //
+  // Kick emotes are span[data-emote-id] elements, so "hide emote-only messages"
+  // never saw a message like "🤣🤣🤣" — to the DOM that is ordinary text.
+  // Extended_Pictographic covers the pictographs; the rest of the class handles
+  // the pieces that join them: variation selectors, zero-width joiners, skin
+  // tone modifiers, keycaps and regional indicators (flags).
+  isEmojiOnly: function (str) {
+    const s = String(str || '').trim();
+    if (!s) return false;
+    let stripped;
+    try {
+      stripped = s.replace(
+        /[\p{Extended_Pictographic}\p{Regional_Indicator}\u{FE0E}\u{FE0F}\u{200D}\u{20E3}\u{1F3FB}-\u{1F3FF}\s]/gu,
+        ''
+      );
+    } catch (_) {
+      return false;            // no Unicode property escapes — fail open
+    }
+    if (stripped.length) return false;
+    // Whitespace alone is not emoji-only; there has to be a pictograph.
+    return /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(s);
+  },
+
   // True when the string consists mainly of a single repeated character or short pattern
   isRepeatedChars: function (str) {
     if (!str) return false;

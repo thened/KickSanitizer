@@ -310,7 +310,12 @@ KS.ChatFilters = (function () {
     let hasEmote = false;
     for (const node of nodes) {
       if (node.nodeType === Node.TEXT_NODE) {
-        if (node.textContent.trim()) return false;
+        const t = node.textContent.trim();
+        if (!t) continue;                       // whitespace between emotes
+        // Unicode emoji are plain text to the DOM, so "🤣🤣🤣" reached here as
+        // ordinary content and the message was never treated as emote-only.
+        if (KS.Normalize.isEmojiOnly(t)) { hasEmote = true; continue; }
+        return false;                           // real words — keep the message
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         // Confirmed emote wrapper: span[data-emote-id]
         if (node.dataset && node.dataset.emoteId !== undefined) {

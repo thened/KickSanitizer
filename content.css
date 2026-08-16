@@ -66,13 +66,14 @@ body.ks-mirror-on [data-testid="chatroom-messages"] {
 }
 
 .ks-mirror-row1,
-.ks-mirror-row2 {
+.ks-mirror-controls {
   display: flex;
   align-items: center;
   gap: 5px;
   min-width: 0;
 }
-.ks-mirror-row2 .ks-mirror-select { flex: 1 1 auto; max-width: none; }
+/* Full width so further controls can sit beside the theme picker later. */
+.ks-mirror-controls .ks-mirror-select { flex: 1 1 auto; max-width: none; }
 
 .ks-mirror-label {
   color: #53fc18;

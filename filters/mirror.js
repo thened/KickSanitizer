@@ -311,8 +311,8 @@ KS.Mirror = (function () {
     const label = document.createElement('span');
     label.className = 'ks-mirror-label' + (on ? '' : ' ks-off');
     label.innerHTML = on
-      ? '<span class="ks-mirror-dot">🧹</span> Clean chat'
-      : '<span class="ks-mirror-dot">💬</span> Kick chat';
+      ? '<span class="ks-mirror-dot">🧹</span> Clean'
+      : '<span class="ks-mirror-dot">💬</span> Kick';
 
     _countEl = document.createElement('span');
     _countEl.className = 'ks-mirror-count';
@@ -320,7 +320,7 @@ KS.Mirror = (function () {
     const btn = document.createElement('button');
     btn.className = 'ks-mirror-btn';
     btn.title = on ? "Switch to Kick's chat" : 'Switch to clean chat';
-    btn.textContent = on ? '⇄ Kick chat' : '⇄ Clean chat';
+    btn.textContent = on ? '⇄ Kick' : '⇄ Clean';
     btn.addEventListener('click', () => _setMirror(!on));
 
     // Theme picker. Lives in the bar rather than the popup because it is the
@@ -352,7 +352,12 @@ KS.Mirror = (function () {
       _removeBar();
     });
 
-    // Row 1: what mode you are in, the count, and the way out.
+    // Controls row, ABOVE the status row — appearance now, more later.
+    const controls = document.createElement('div');
+    controls.className = 'ks-mirror-controls';
+    controls.appendChild(theme);
+
+    // Status row: which mode you are in, how much has been filtered, the way out.
     const row1 = document.createElement('div');
     row1.className = 'ks-mirror-row1';
     row1.appendChild(label);
@@ -360,14 +365,8 @@ KS.Mirror = (function () {
     row1.appendChild(btn);
     row1.appendChild(hide);
 
-    // Row 2: appearance. On its own line — four controls did not fit a 340px
-    // column, and "Kick chat" was wrapping to two lines inside its own button.
-    const row2 = document.createElement('div');
-    row2.className = 'ks-mirror-row2';
-    row2.appendChild(theme);
-
+    _bar.appendChild(controls);
     _bar.appendChild(row1);
-    _bar.appendChild(row2);
     _updateCount();
     _layout();
     _hideNewMessagesIndicator();
@@ -471,7 +470,6 @@ KS.Mirror = (function () {
       _odoEl = document.createElement('span');
       _odoEl.className = 'ks-odo';
       _countEl.appendChild(_odoEl);
-      _countEl.appendChild(document.createTextNode(' filtered'));
     }
     _setOdometer(_odoEl, n);
   }
