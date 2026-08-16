@@ -63,6 +63,9 @@ KS.Mirror = (function () {
       ['clown',      '🤡 Clown'],
       ['fabulous',   '✨ Fabulous'],
       ['gross',      '🤢 Gross'],
+      ['psychedelic','🌀 Psychedelic'],
+      ['hypnotoad',  '🐸 Hypnotoad'],
+      ['eightbit',   '🎮 8-bit'],
     ]],
   ];
 

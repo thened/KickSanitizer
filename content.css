@@ -952,3 +952,209 @@ body.ks-diablo #ks-mirror .ks-mirror-row img {
   line-height: 1.4;
   text-align: center;
 }
+
+/* Psychedelic: hues cycling, the whole list breathing.
+   The ONLY animated element is #ks-mirror itself — one filter animation on one
+   element, which the compositor handles. Animating colour per message would
+   mean repainting every visible row every frame, and per-message cost is the
+   one thing that has actually hurt performance in this extension.
+   Messages still differ from each other via static per-row hues; the container
+   rotates all of them together, so the palette moves without any row being
+   individually animated. */
+@keyframes ks-psy {
+  0%   { filter: hue-rotate(0deg)   saturate(1.7) brightness(1);    }
+  25%  { filter: hue-rotate(90deg)  saturate(2.2) brightness(1.18); }
+  50%  { filter: hue-rotate(180deg) saturate(1.7) brightness(1);    }
+  75%  { filter: hue-rotate(270deg) saturate(2.2) brightness(1.18); }
+  100% { filter: hue-rotate(360deg) saturate(1.7) brightness(1);    }
+}
+@keyframes ks-psy-bg {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+body.ks-psychedelic #ks-mirror {
+  background: linear-gradient(125deg, #2a0845, #1b1464, #0f3460, #4a148c, #2a0845);
+  background-size: 400% 400%;
+  animation: ks-psy 9s linear infinite, ks-psy-bg 24s ease-in-out infinite;
+}
+body.ks-psychedelic #ks-mirror .ks-mirror-row,
+body.ks-psychedelic #ks-mirror .ks-mirror-row * {
+  background: transparent !important;
+  font-weight: 600 !important;
+  letter-spacing: .01em;
+}
+
+/* Six static hues. hue-rotate on the container moves all of them at once, so
+   the list stays varied while nothing per-row is animated. */
+body.ks-psychedelic #ks-mirror .ks-mirror-row:nth-child(6n+1) span.font-normal { color: #ff4d6d !important; }
+body.ks-psychedelic #ks-mirror .ks-mirror-row:nth-child(6n+2) span.font-normal { color: #ffa63d !important; }
+body.ks-psychedelic #ks-mirror .ks-mirror-row:nth-child(6n+3) span.font-normal { color: #f9f871 !important; }
+body.ks-psychedelic #ks-mirror .ks-mirror-row:nth-child(6n+4) span.font-normal { color: #3dffb1 !important; }
+body.ks-psychedelic #ks-mirror .ks-mirror-row:nth-child(6n+5) span.font-normal { color: #4dd2ff !important; }
+body.ks-psychedelic #ks-mirror .ks-mirror-row:nth-child(6n)   span.font-normal { color: #c77dff !important; }
+
+body.ks-psychedelic #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  color: #fff !important;
+  text-shadow: 0 0 8px currentColor;
+}
+body.ks-psychedelic #ks-mirror .ks-mirror-row span.text-neutral {
+  color: rgba(255, 255, 255, .45) !important;
+}
+
+/* Throbbing colour is exactly what some people must not be shown — vestibular
+   disorders and photosensitivity both. The theme keeps its palette, loses its
+   pulse. */
+@media (prefers-reduced-motion: reduce) {
+  body.ks-psychedelic #ks-mirror {
+    animation: none;
+    filter: saturate(1.7);
+    background-position: 0% 50%;
+  }
+}
+
+/* Hypnotoad: concentric rings swelling outward behind the chat, hue drifting.
+   ALL GLORY TO THE HYPNOTOAD.
+
+   The rings live on the container's own background rather than an overlay
+   element. #ks-mirror is the scroll container, and background-attachment
+   defaults to `scroll` on it — which for a scrollable element means the
+   background stays put while the content moves over it. An absolutely
+   positioned ::before would have scrolled away with the messages.
+
+   One animated element again, for the same reason as Psychedelic: per-row
+   animation would repaint every visible message every frame. */
+@keyframes ks-hypno-swell {
+  from { background-size: 120% 120%; }
+  to   { background-size: 320% 320%; }
+}
+/* Hue drift and focus drift on the same filter, so it stays ONE animation on
+   one element. Blur is expensive per frame, so it is kept shallow and slow —
+   and it goes on the container, meaning the rings soften with the text rather
+   than the text swimming against a sharp background.
+   Peak blur is deliberately mild: enough to lose focus, not enough that a
+   message becomes unreadable if it arrives at the wrong moment. */
+@keyframes ks-hypno-hue {
+  0%   { filter: hue-rotate(0deg)   saturate(1.5) blur(0px);   }
+  50%  { filter: hue-rotate(180deg) saturate(1.5) blur(1.8px); }
+  100% { filter: hue-rotate(360deg) saturate(1.5) blur(0px);   }
+}
+
+body.ks-hypnotoad #ks-mirror {
+  background-color: #04140a;
+  background-image: repeating-radial-gradient(circle at 50% 45%,
+    #4fe36b 0 10px, #0b3d1c 10px 20px, #1b8f3a 20px 30px, #061f0e 30px 40px);
+  background-position: center;
+  background-repeat: no-repeat;
+  animation: ks-hypno-swell 7s ease-in-out infinite alternate,
+             ks-hypno-hue 11s ease-in-out infinite;
+}
+
+/* The rings are loud, so the text has to win. Solid white on its own dark
+   backing rather than transparent over the pattern — legibility is not
+   negotiable just because the theme is a joke. */
+body.ks-hypnotoad #ks-mirror .ks-mirror-row {
+  background: rgba(0, 0, 0, .55) !important;
+  border-radius: 4px;
+}
+body.ks-hypnotoad #ks-mirror .ks-mirror-row * {
+  color: #eaffea !important;
+  background: transparent !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .95);
+}
+body.ks-hypnotoad #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  color: #9dff9d !important;
+  font-weight: 700 !important;
+}
+body.ks-hypnotoad #ks-mirror .ks-mirror-row span.text-neutral {
+  color: rgba(234, 255, 234, .5) !important;
+}
+
+/* Swelling concentric rings are close to the worst case for photosensitivity
+   and vestibular disorders. Keep the pattern, stop it moving. */
+@media (prefers-reduced-motion: reduce) {
+  body.ks-hypnotoad #ks-mirror {
+    animation: none;
+    background-size: 200% 200%;
+    filter: saturate(1.5);
+  }
+}
+
+/* 8-bit: NES dialogue boxes.
+   The colours are drawn from the NES hardware palette — a property of the
+   2C02 PPU rather than artwork, so nothing here belongs to anyone. Described by
+   name rather than by palette index: the index-to-RGB tables in circulation
+   disagree with each other, and a precise-looking $XX label would be claiming
+   more than is actually known.
+
+   Bright-on-black rather than dark-on-cream: that is what the console actually
+   did, and it is the only way seven username colours stay distinguishable from
+   each other. Square corners for the same reason — the hardware had no way to
+   draw a rounded one.
+
+   Usernames are coloured from data-ks-cvd, the stable username hash already
+   stamped on every row for the colour-blind-safe theme. Reusing it means a
+   person keeps the same colour here too, across reloads and channels, with no
+   extra state and no extra work per message. */
+body.ks-eightbit #ks-mirror {
+  background: #000000;
+  padding: 8px 8px 12px;
+  /* Wider than any other theme. Each message is a framed box rather than a
+     line of text, so they need room to read as separate windows instead of one
+     ladder of borders. */
+  gap: 11px;
+}
+
+/* The dialogue box: black fill inside a rounded white frame, in the manner of
+   the era's command windows.
+   The corner is a compromise. The original is a pixel-stepped corner — a
+   handful of square steps, not a curve — and reproducing that in CSS needs
+   either an image or a stack of gradients per corner. border-radius draws a
+   smooth arc instead, which at chat text sizes reads the same and costs
+   nothing. Worth knowing it is an approximation rather than the real shape.
+   The inner black ring keeps the frame from touching the text, which is what
+   gives it the inset, plated look rather than a plain outline. */
+body.ks-eightbit #ks-mirror .ks-mirror-row {
+  background: #000000 !important;
+  border: 3px solid #fcfcfc;
+  border-radius: 9px;
+  padding: 7px 10px !important;
+  box-shadow: inset 0 0 0 3px #000000;
+}
+body.ks-eightbit #ks-mirror .ks-mirror-row * {
+  font-family: ui-monospace, "SF Mono", Consolas, "Courier New", monospace !important;
+  color: #fcfcfc !important;
+  background: transparent !important;
+  text-shadow: none !important;
+  letter-spacing: .02em;
+  line-height: 1.5 !important;
+}
+body.ks-eightbit #ks-mirror .ks-mirror-row button[data-prevent-expand] {
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+/* Seven entries, chosen for separation from each other AND for contrast on
+   black. Crimson was the obvious red but measures 4.4:1, just under the 4.5
+   needed for body text, so it is out — and with it the orange that sat too
+   close to red to be told apart anyway. Every colour below clears 5:1. */
+body.ks-eightbit #ks-mirror .ks-mirror-row[data-ks-cvd="0"] button[data-prevent-expand] { color: #f83800 !important; }  /* red */
+body.ks-eightbit #ks-mirror .ks-mirror-row[data-ks-cvd="1"] button[data-prevent-expand] { color: #3cbcfc !important; }  /* sky */
+body.ks-eightbit #ks-mirror .ks-mirror-row[data-ks-cvd="2"] button[data-prevent-expand] { color: #b8f818 !important; }  /* lime */
+body.ks-eightbit #ks-mirror .ks-mirror-row[data-ks-cvd="3"] button[data-prevent-expand] { color: #f8b800 !important; }  /* gold */
+body.ks-eightbit #ks-mirror .ks-mirror-row[data-ks-cvd="4"] button[data-prevent-expand] { color: #f878f8 !important; }  /* pink */
+body.ks-eightbit #ks-mirror .ks-mirror-row[data-ks-cvd="5"] button[data-prevent-expand] { color: #58f898 !important; }  /* mint */
+body.ks-eightbit #ks-mirror .ks-mirror-row[data-ks-cvd="6"] button[data-prevent-expand] { color: #b8b8f8 !important; }  /* periwinkle */
+
+body.ks-eightbit #ks-mirror .ks-mirror-row span.text-neutral {
+  color: #7c7c7c !important;
+  font-size: 10px !important;
+}
+
+/* Nearest-neighbour scaling, so emotes and badges look drawn rather than
+   resampled. This is what actually sells the era. */
+body.ks-eightbit #ks-mirror .ks-mirror-row img {
+  image-rendering: pixelated;
+}

@@ -112,9 +112,18 @@ clicking a username still opens Kick's profile card.
 
 APPEARANCE
 
-Seven themes, switchable from a bar above chat: Normal, Clown, Terminal,
-CRT Amber, Typewriter, High Contrast and Minimal. Badges can be hidden by kind
-— level badges, all non-moderator badges, or moderator badges.
+Fifteen themes, switchable from a bar above chat, in two groups.
+
+Plain, for reading chat: Normal, Minimal, High Contrast, Colour-blind safe and
+Typewriter. Colour-blind safe gives every chatter a stable colour drawn from a
+palette that stays distinguishable under the common forms of colour vision
+deficiency.
+
+Styled, for the fun of it: Terminal, CRT Amber, Synthwave, Diablo, Clown,
+Fabulous, Gross, Psychedelic, Hypnotoad and 8-bit.
+
+Badges can be hidden by kind — level badges, all non-moderator badges, or
+moderator badges.
 
 PAGE CLEANUP
 
@@ -211,7 +220,10 @@ Shot list, in the order they should appear:
 1. **Side by side** — Kick's raw chat next to clean chat on the same channel.
    This is the whole pitch in one image.
 2. **The popup**, Chat tab, showing the filter list.
-3. **A theme** — Terminal or CRT Amber reads most distinctly at thumbnail size.
+3. **A theme** — one of the loud ones: Hypnotoad, 8-bit or Fabulous. The job of
+   this shot is to make someone curious enough to install, not to demonstrate
+   legibility. Plain themes are what people actually read chat in; Styled is
+   what makes them try it.
 4. **The mode bar** with the filtered-count odometer showing a non-trivial number.
 5. **Page cleanup** — sidebar and widgets before/after.
 
