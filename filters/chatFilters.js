@@ -568,48 +568,6 @@ KS.ChatFilters = (function () {
   // suggested channels, top gifters) and counts emote strips individually, so
   // one message with five emotes added five. "N filtered" should mean
   // N messages you did not have to read.
-  const _filteredKeys = new Set();
-  const _filteredOrder = [];
-  // The running total is kept separately from the dedupe set. They were the
-  // same thing, and the set is a bounded window — it evicts its oldest key past
-  // 2000 — so the displayed count silently stopped rising at 2000 no matter how
-  // much had actually been filtered. The set answers "have I already counted
-  // this message"; only this answers "how many".
-  let _filteredTotal = 0;
-
-  // Identity for counting. This has to satisfy two things at once: the same
-  // message must not count twice when the virtualiser destroys and recreates
-  // its row, and two DIFFERENT messages must never collapse into one.
-  //
-  // username|time|text satisfied the first and failed the second badly. A
-  // duplicate has the same author and the same text by definition, so any
-  // repeat inside the same clock minute produced an identical key and went
-  // uncounted — meaning the single most-filtered thing in chat barely moved the
-  // number. Emote-only messages were worse still: their text normalises to '',
-  // so every one from a given user in a minute collapsed to one.
-  //
-  // The virtualiser's own data-index is the message's sequence number in Kick's
-  // list: unique per message, stable across the re-render, and reset when the
-  // channel changes. It is the "message id" this counter was always meant to
-  // key on. The old composite stays as a fallback for rows rendered outside a
-  // [data-index] wrapper.
-  // data-index was tried here and is WRONG. It is the row's position in Kick's
-  // list, not an identifier for the message: as the list scrolls, entries leave
-  // the top and every remaining message's index shifts. So the same message
-  // gets a new index over time, and each time the virtualiser recreates its row
-  // it produced a fresh key and counted again — the number climbed without
-  // bound. Over-counting is worse than under-counting, so this is back to the
-  // composite, whose flaw is at least bounded and in the safe direction.
-  //
-  // Kick puts no message id in the DOM. The only true id comes over the socket,
-  // which is where a correct fix has to come from.
-  function _messageIdentity(el) {
-    const user = getUsername(el) || '';
-    const text = getMessageText(el) || '';
-    const time = (el.querySelector('span.text-neutral')?.textContent || '').trim();
-    return (user || text) ? user + '|' + time + '|' + text.slice(0, 160) : '';
-  }
-
   // ── Counting, from the socket ──────────────────────────────────────────────
   //
   // The DOM cannot answer "how many messages were filtered". Once the
@@ -690,20 +648,18 @@ KS.ChatFilters = (function () {
   // Prefer the socket, which is exact. Fall back to the DOM tally only when the
   // tap has produced nothing — a socket that failed to connect should not leave
   // the readout stuck at zero while messages visibly vanish.
-  function filteredCount() { return _sockSeen ? _sockTotal : _filteredTotal; }
+  // ONE source, always. This used to fall back to a DOM tally until the socket
+  // delivered its first message, which meant the readout climbed on DOM numbers
+  // and then jumped DOWN to the socket's when the tap came up — observed live
+  // going 79 -> 54. A count that can move backwards is worse than one that
+  // starts late, so it now shows nothing until the socket is feeding.
+  function filteredCount() { return _sockTotal; }
 
   function _hide(el, reason) {
     // Count only the not-hidden -> hidden transition; processMessage can be
     // called again for the same element and we do not want to double-count.
     if (!el.dataset.ksHidden) {
       if (window.KS && KS.Stats) KS.Stats.count(reason);
-      const key = _messageIdentity(el);
-      if (key && !_filteredKeys.has(key)) {
-        _filteredKeys.add(key);
-        _filteredOrder.push(key);
-        _filteredTotal++;
-        while (_filteredOrder.length > 2000) _filteredKeys.delete(_filteredOrder.shift());
-      }
     }
     el.dataset.ksHidden = reason;
   }
@@ -768,9 +724,6 @@ KS.ChatFilters = (function () {
     document.querySelectorAll('[data-ks-collapsed]').forEach(el => delete el.dataset.ksCollapsed);
     _dupeHistory.clear();
     _copypastaMap.clear();
-    _filteredKeys.clear();
-    _filteredOrder.length = 0;
-    _filteredTotal = 0;
     _sockCounted.clear();
     _sockDupe.clear();
     _sockTotal = 0;

@@ -706,6 +706,16 @@ KS.Mirror = (function () {
     const raw = String(value);
     const s = raw.padStart(Math.max(ODO_DIGITS, raw.length), '0');
 
+    // A count should only ever rise. If it somehow falls, rolling every drum
+    // forward to reach a lower number looks like the readout has lost its mind
+    // — which is exactly how the DOM/socket source switch presented before it
+    // was removed. Snap instead, so a regression reads as a jump rather than a
+    // seizure, and stays visible as a bug instead of being dressed up.
+    const prev = Number(host.dataset.value);
+    const curr = Number(value);
+    if (Number.isFinite(prev) && curr < prev) host.innerHTML = '';
+    host.dataset.value = String(curr);
+
     // Rebuild only when the number of digits changes (9 -> 10, 99 -> 100).
     //
     // Each strip carries TWO cycles of 0-9. A real odometer only ever turns one
