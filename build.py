@@ -32,6 +32,7 @@ SHIP_FILES = [
     "utils/kickSelectors.js",
     "utils/messageNormalization.js",
     "filters/chatters.js",
+    "filters/botlist.js",
     "filters/chatFilters.js",
     "filters/chatSocket.js",
     "filters/avatars.js",

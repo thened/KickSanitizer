@@ -41,6 +41,7 @@
         "storage.js",
         "stats.js",
         "filters/chatters.js",
+        "filters/botlist.js",
         "filters/chatFilters.js",
         "filters/chatSocket.js",
         "filters/avatars.js",
@@ -54,5 +55,8 @@
       "run_at": "document_idle",
       "all_frames": false
     }
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
   ]
 }

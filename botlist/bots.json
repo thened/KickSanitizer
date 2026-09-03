@@ -1,0 +1,15 @@
+{
+  "through": "2026-08-17",
+  "note": "Known automated chat accounts. Served at https://bots.nedbot.site/bots.json — see server.md.",
+  "bots": [
+    { "username": "kickbot", "added": "2026-08-17", "kind": "platform" },
+    { "username": "botrix", "added": "2026-08-17", "kind": "service" },
+    { "username": "streamelements", "added": "2026-08-17", "kind": "service" },
+    { "username": "fossabot", "added": "2026-08-17", "kind": "service" },
+    { "username": "nightbot", "added": "2026-08-17", "kind": "service" },
+    { "username": "moobot", "added": "2026-08-17", "kind": "service" },
+    { "username": "wizebot", "added": "2026-08-17", "kind": "service" },
+    { "username": "sery_bot", "added": "2026-08-17", "kind": "service" }
+  ],
+  "removed": []
+}

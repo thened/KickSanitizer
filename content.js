@@ -54,6 +54,7 @@
         _startButtonWatch();
         _startInputFocusWatch();
         _identifyViewer();
+        if (KS.BotList) KS.BotList.load(_settings);
       }, 800);
 
       _startObserver();
@@ -682,6 +683,7 @@
       ['observer', _ensureChatObserved],
       ['rules',    _autoAcceptChatRules],
       ['reward',   _autoClaimReward],
+      ['botlist',  () => { if (KS.BotList) KS.BotList.maybePull(_settings); }],
     ];
 
     _btnWatch = setInterval(() => {
@@ -748,6 +750,7 @@
         channel: _currentChannel || null,
         navs: _navCount,
         avatars: (KS.Avatars && KS.Avatars.stats) ? KS.Avatars.stats() : null,
+        bots: (KS.BotList && KS.BotList.stats) ? KS.BotList.stats() : null,
         viewers: (KS.PageFilters && KS.PageFilters.viewerStats)
           ? KS.PageFilters.viewerStats() : null,
         at: new Date().toLocaleTimeString(),   // so a stale read is obvious

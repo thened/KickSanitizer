@@ -233,6 +233,14 @@
     </label>
     <input type="checkbox" id="chat-levelups" data-key="chat_hideLevelUps">
   </div>
+
+  <div class="ks-row">
+    <label for="chat-burst">
+      Hide coordinated spam
+      <span class="ks-hint">Many accounts each posting one crafted sentence at the same moment</span>
+    </label>
+    <input type="checkbox" id="chat-burst" data-key="chat_hideBurstSpam">
+  </div>
   <div class="ks-row">
     <label for="chat-all-caps">Hide all-caps messages</label>
     <input type="checkbox" id="chat-all-caps" data-key="chat_hideAllCaps">
@@ -419,10 +427,35 @@
     <input type="checkbox" id="page-autoplay" data-key="page_hideAutoplayOverlays">
   </div>
 
+  <div class="ks-row">
+    <label for="page-notifications">
+      Hide notification pop-ups
+      <span class="ks-hint">Kick's toasts. Also hides genuine ones — failed messages, timeouts, moderation actions.</span>
+    </label>
+    <input type="checkbox" id="page-notifications" data-key="page_hideNotifications">
+  </div>
+
   <div class="ks-divider"></div>
   <div class="ks-section-title">Hidden channels</div>
   <p class="ks-hint" style="margin-bottom:6px">Channels you've disliked from the sidebar. Hover a channel tile on Kick and click ✕ to add one.</p>
   <div id="blocklist-container"></div>
+
+  <div class="ks-divider"></div>
+  <div class="ks-section-title">Marked bots</div>
+  <p class="ks-hint" style="margin-bottom:6px">Accounts whose messages you never want to see. Stored on this device — marking someone affects nobody but you.</p>
+  <div class="ks-row">
+    <input type="text" id="botlist-add" placeholder="username" style="flex:1 1 auto;min-width:0">
+    <button class="ks-link-btn" id="botlist-add-btn">Add</button>
+  </div>
+  <div id="botlist-container"></div>
+
+  <div class="ks-section-title">Shared lists</div>
+  <p class="ks-hint" style="margin-bottom:6px">Servers to pull known bots from, and optionally report to. Adding one asks your permission to reach that host — nothing is contacted until you allow it, and you can revoke it in Chrome at any time.</p>
+  <div class="ks-row">
+    <input type="text" id="source-add" placeholder="https://bots.example.com" style="flex:1 1 auto;min-width:0">
+    <button class="ks-link-btn" id="source-add-btn">Add</button>
+  </div>
+  <div id="sources-container"></div>
 
 </div>
 
@@ -501,6 +534,9 @@
 <!-- ── Footer ───────────────────────────────────────────────────────────── -->
 <div id="status-msg" class="ks-status" hidden></div>
 
+<!-- botlist.js first: popup.js calls KS.BotList when reporting is on, and
+     the popup is a separate page from the content scripts. -->
+<script src="filters/botlist.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

@@ -290,6 +290,37 @@ KS.Sel = {
   ],
 
   // ── Autoplay overlay ─────────────────────────────────────────────────────
+  // Kick's toast region. Confirmed live:
+  //   <section aria-label="Notifications alt+T" aria-live="polite"
+  //            aria-relevant="additions text" aria-atomic="false">
+  //
+  // Structure first, text last. The aria-label carries a keyboard hint and is
+  // translated, so matching on it alone would break for anyone not reading Kick
+  // in English; a live region declaring aria-relevant is a much narrower thing
+  // to match and is not language-dependent.
+  // The Kicks pill strip above chat — one button per contribution, each with an
+  // avatar, a countdown bar and the amount. Confirmed live 2026-08-21:
+  //   <button class="relative flex h-[36px] max-w-[106px] min-w-[106px] ...">
+  //     <div style="transform: scaleX(0.12)"></div>        countdown
+  //     <span><img src=".../profile_image/..."></span>     who sent it
+  //     <span><span title="500">500</span></span>          amount
+  //
+  // Matched on structure, not Tailwind classes: an avatar image plus a span
+  // whose title is a bare number is a shape nothing else on the page has, and
+  // the arbitrary-value classes here are exactly the sort that change.
+  //
+  // The amount lives in title=, not the text. The text abbreviates to "1.2K"
+  // once it is large enough; the attribute stays exact.
+  kicksPill: [
+    'button:has(img[src*="profile_image"]):has(span[title])',
+  ],
+
+  notificationsRegion: [
+    'section[aria-live][aria-relevant*="additions"]',
+    'section[aria-live="polite"][aria-atomic="false"]',
+    'section[aria-label*="Notification" i]',
+  ],
+
   autoplayOverlay: [
     '[data-testid="autoplay-overlay"]',
     '[data-testid="up-next"]',

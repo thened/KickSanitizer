@@ -79,6 +79,56 @@ KS.ChatFilters = (function () {
     return new RegExp('@' + escaped + '\\b', 'i').test(text);
   }
 
+  // ── Coordinated statement spam ─────────────────────────────────────────────
+  //
+  // A newer shape of spam: many accounts each posting ONE well-formed factual
+  // sentence about the streamer, all within the same few seconds. Every message
+  // is unique, so duplicate, copypasta, caps, link, length and bot-command
+  // checks all pass it through.
+  //
+  // No single signal is enough — a person can write one long proper sentence —
+  // so this needs the burst as well as the shape. It is copypasta detection
+  // generalised from "same text" to "same shape, many users, at once".
+  //
+  // Deliberately conservative. The cost of a false positive here is hiding
+  // somebody's genuine, carefully written message, which is worse than letting
+  // spam through, so the threshold is high and the shape test is strict.
+  const _statementBurst = [];        // { user, at }
+  const BURST_WINDOW_MS = 90000;
+
+  // Chat does not write like this. Terminal punctuation is the strongest single
+  // tell: almost nobody ends a chat message with a full stop.
+  function _looksLikeStatement(text) {
+    const t = String(text || '').trim();
+    if (t.length < 45) return false;
+    if (!/[.!?]$/.test(t)) return false;
+    if (!/^[A-Z"“]/.test(t)) return false;
+    if (/^[!@]/.test(t)) return false;              // commands and replies
+    if (/https?:/i.test(t)) return false;           // links have their own filter
+    // Word boundaries matter: without them "lol" matches inside Lolita or
+    // colloquial, exempting perfectly ordinary sentences from the check.
+    if (/\b(lol|lmao|omg|kek|bruh|wtf)\b/i.test(t)) return false;
+    // Eight words or more. A shouted phrase that happens to end in a full
+    // stop is not what this is looking for.
+    return t.split(/\s+/).length >= 8;
+  }
+
+  // True once enough DISTINCT accounts have posted statement-shaped messages
+  // inside the window. Distinct is the point: one person writing several long
+  // sentences is a person talking, not a campaign.
+  function _isStatementBurst(username, threshold) {
+    const now = Date.now();
+    while (_statementBurst.length && now - _statementBurst[0].at > BURST_WINDOW_MS) {
+      _statementBurst.shift();
+    }
+    const user = String(username || '').toLowerCase();
+    _statementBurst.push({ user, at: now });
+    if (_statementBurst.length > 400) _statementBurst.shift();
+
+    const users = new Set(_statementBurst.map(e => e.user));
+    return users.size >= threshold;
+  }
+
   // ── Main entry point ───────────────────────────────────────────────────────
 
   // Kick's own chat is READ-ONLY.
@@ -195,6 +245,20 @@ KS.ChatFilters = (function () {
 
     if (s.chat_hideLevelUps && text && _isLevelUpNotice(text, username)) {
       return _hide(msgEl, 'level-up');
+    }
+
+    // Accounts marked as bots — locally, or on the shared list if that is
+    // switched on. Checked early: if you have said someone is a bot, none of
+    // the other filters need an opinion about their message.
+    if (s.chat_hideMarkedBots !== false && username
+        && KS.BotList && KS.BotList.isBot(username, s)) {
+      return _hide(msgEl, 'marked-bot');
+    }
+
+    // Coordinated statement spam — many accounts, one crafted sentence each.
+    if (s.chat_hideBurstSpam && text && _looksLikeStatement(text)
+        && _isStatementBurst(username, s.chat_burstSpamThreshold || 6)) {
+      return _hide(msgEl, 'burst-spam');
     }
 
     // Bot commands (!command)

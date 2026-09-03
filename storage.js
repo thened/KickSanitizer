@@ -32,6 +32,21 @@ KS.DEFAULT_SETTINGS = {
   chat_hideBotGames: false,           // !fish etc. and the bot replies to them
   chat_botGameCommands: 'fish,hunt,duel,flag,country,guess,slots,cookie,mine,farm',
   chat_hideLevelUps: false,           // "@user just reached level N!" from chat bots
+  // Many accounts each posting one crafted sentence in the same moment. Off by
+  // default and conservative: a false positive hides somebody's real message.
+  // Accounts marked as bots. The local list works on its own; the two sync
+  // switches are separate and both off, because each changes what the
+  // extension does rather than only what it hides.
+  chat_hideMarkedBots: true,
+  // Shared bot lists. Each source carries its own pull and submit flags, and
+  // reaching a host at all requires a permission the user grants when adding
+  // it. Shipped with one preset, switched off — it is a suggestion, not a
+  // default connection.
+  bots_sources: [
+    { url: 'https://bots.nedbot.site', pull: false, submit: false },
+  ],
+  chat_hideBurstSpam: false,
+  chat_burstSpamThreshold: 6,         // distinct accounts within 90 seconds
   chat_hideBotResponses: false,
   chat_hideAllCaps: false,
   chat_hideRepeatedChars: false,
@@ -83,6 +98,9 @@ KS.DEFAULT_SETTINGS = {
   page_hideGoals: false,
   page_hideSuggestedChannels: true,
   page_hideRecommendedStreams: false,
+  // Kick's toast pop-ups. Off by default: they carry genuine feedback as well
+  // as noise — a failed message, a timeout, a moderation action.
+  page_hideNotifications: false,
   page_hideAutoplayOverlays: false,
   // Kick pops a "Congratulations!" modal when someone gifts you a sub. Off by
   // default like the other automations: it clicks a button for you, even
@@ -104,7 +122,10 @@ KS.DEFAULT_SETTINGS = {
 };
 
 // Keys stored in chrome.storage.local instead of sync (objects, device-specific)
-const LOCAL_KEYS = ['channelOverrides', 'blockedChannels'];
+// blockedChatters and the cached remote list are LOCAL, not synced: both can
+// grow long, and sync storage has a small per-item quota.
+const LOCAL_KEYS = ['channelOverrides', 'blockedChannels', 'blockedChatters',
+                    'remoteBots', 'remoteBotsAt'];
 
 KS.getSettings = function () {
   return new Promise((resolve) => {

@@ -17,6 +17,8 @@
     chat_copypastaWindowSeconds: 60,
     chat_hideBotCommands: false,
     chat_hideLevelUps: false,
+    chat_hideBurstSpam: false,
+    chat_burstSpamThreshold: 6,
     chat_hideBotResponses: false,
     chat_hideAllCaps: false,
     chat_hideRepeatedChars: false,
@@ -60,6 +62,7 @@
     page_hideBanNotice: false,
     page_hideSuggestedChannels: true,
     page_hideRecommendedStreams: false,
+    page_hideNotifications: false,
     page_hideAutoplayOverlays: false,
     page_autoDismissGiftDialog: false,
     page_forceViewerCount: false,
@@ -75,14 +78,16 @@
   // string. The tab lookup leaves this value alone when it finds no kick.com tab.
   let _channel = new URLSearchParams(location.search).get('channel') || null;
   let _blockedChannels = [];
+  let _blockedChatters = [];
 
   // ── Storage helpers ────────────────────────────────────────────────────────
 
   function loadSettings() {
     return new Promise(resolve => {
       chrome.storage.sync.get(null, (synced) => {
-        chrome.storage.local.get(['channelOverrides', 'blockedChannels'], (local) => {
+        chrome.storage.local.get(['channelOverrides', 'blockedChannels', 'blockedChatters'], (local) => {
           _blockedChannels = local.blockedChannels || [];
+          _blockedChatters = local.blockedChatters || [];
           _settings = Object.assign({}, DEFAULT, synced, local);
           resolve(_settings);
         });
@@ -164,6 +169,8 @@
     if (kicksMinV) kicksMinV.textContent = _settings.chat_kicksMinAmount > 0 ? _settings.chat_kicksMinAmount : 'disabled';
 
     _renderBlocklist();
+    _renderBotlist();
+    _renderSources();
 
     // Scope radios
     document.querySelectorAll('input[name="scope"]').forEach(r => {
@@ -194,6 +201,132 @@
       const reset = document.getElementById('clear-channel-overrides');
       if (reset) reset.hidden = !n;
     }
+  }
+
+  function _renderBotlist() {
+    const container = document.getElementById('botlist-container');
+    if (!container) return;
+    if (!_blockedChatters.length) {
+      container.innerHTML = '<p class="ks-blocklist-empty">No accounts marked yet.</p>';
+      return;
+    }
+    // textContent, never innerHTML, for the names: these are strings a stranger
+    // chose, and building markup out of them would make chat an injection
+    // surface into the extension's own UI.
+    container.innerHTML = '';
+    _blockedChatters.forEach((name, i) => {
+      const row = document.createElement('div');
+      row.className = 'ks-blocklist-item';
+      const label = document.createElement('span');
+      label.className = 'ks-blocklist-slug';
+      label.textContent = name;
+      const rm = document.createElement('button');
+      rm.className = 'ks-blocklist-remove';
+      rm.textContent = '✕';
+      rm.title = 'Unmark ' + name;
+      rm.addEventListener('click', () => {
+        _blockedChatters = _blockedChatters.filter((_, j) => j !== i);
+        chrome.storage.local.set({ blockedChatters: _blockedChatters }, _renderBotlist);
+      });
+      row.appendChild(label);
+      row.appendChild(rm);
+      container.appendChild(row);
+    });
+  }
+
+  function _addMarkedBot() {
+    const input = document.getElementById('botlist-add');
+    if (!input) return;
+    const name = String(input.value || '').trim().toLowerCase().replace(/^@/, '');
+    if (!name || _blockedChatters.includes(name)) { input.value = ''; return; }
+
+    _blockedChatters.push(name);
+    chrome.storage.local.set({ blockedChatters: _blockedChatters }, _renderBotlist);
+    input.value = '';
+
+    // Reporting is a separate switch and happens only if it is on. Failures are
+    // deliberately silent to the user's own list: the local mark has already
+    // taken effect, and the report is a bonus rather than the point.
+    // Reported only to sources with reporting switched on; if none are, this
+    // resolves immediately having sent nothing.
+    if (window.KS && KS.BotList) KS.BotList.submit(name, _settings).catch(() => {});
+  }
+
+  function _renderSources() {
+    const box = document.getElementById('sources-container');
+    if (!box) return;
+    const list = Array.isArray(_settings.bots_sources) ? _settings.bots_sources : [];
+    box.innerHTML = '';
+    if (!list.length) {
+      box.innerHTML = '<p class="ks-blocklist-empty">No shared lists.</p>';
+      return;
+    }
+    list.forEach((src, i) => {
+      const row = document.createElement('div');
+      row.className = 'ks-blocklist-item';
+
+      // textContent: a source URL is user input, and building markup from it
+      // would make the settings page an injection surface.
+      const url = document.createElement('span');
+      url.className = 'ks-blocklist-slug';
+      url.textContent = src.url;
+      row.appendChild(url);
+
+      for (const [flag, label] of [['pull', 'pull'], ['submit', 'report']]) {
+        const wrap = document.createElement('label');
+        wrap.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:11px';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!src[flag];
+        cb.addEventListener('change', () => {
+          const next = list.slice();
+          next[i] = Object.assign({}, next[i], { [flag]: cb.checked });
+          // Turning either flag ON needs the host permission; without it the
+          // fetch would fail silently and the switch would look broken.
+          const need = cb.checked;
+          const proceed = need && KS.BotList
+            ? KS.BotList.requestPermission(src.url)
+            : Promise.resolve(true);
+          proceed.then((ok) => {
+            if (need && !ok) { cb.checked = false; return; }
+            saveSetting('bots_sources', next);
+            _settings.bots_sources = next;
+          });
+        });
+        wrap.appendChild(cb);
+        wrap.appendChild(document.createTextNode(label));
+        row.appendChild(wrap);
+      }
+
+      const rm = document.createElement('button');
+      rm.className = 'ks-blocklist-remove';
+      rm.textContent = '✕';
+      rm.title = 'Remove ' + src.url;
+      rm.addEventListener('click', () => {
+        const next = list.filter((_, j) => j !== i);
+        saveSetting('bots_sources', next);
+        _settings.bots_sources = next;
+        _renderSources();
+      });
+      row.appendChild(rm);
+      box.appendChild(row);
+    });
+  }
+
+  function _addSource() {
+    const input = document.getElementById('source-add');
+    if (!input || !window.KS || !KS.BotList) return;
+    const base = KS.BotList.normaliseSource(input.value);
+    if (!base) { input.value = ''; return; }
+
+    const list = Array.isArray(_settings.bots_sources) ? _settings.bots_sources : [];
+    if (list.some(s => s.url === base)) { input.value = ''; return; }
+
+    const next = list.concat([{ url: base, pull: false, submit: false }]);
+    saveSetting('bots_sources', next);
+    _settings.bots_sources = next;
+    input.value = '';
+    _renderSources();
   }
 
   function _renderBlocklist() {
@@ -270,6 +403,16 @@
       r.addEventListener('change', () => {
         if (r.checked) saveSetting('scope', r.value);
       });
+    });
+
+    // Mark a bot
+    const addBtn = document.getElementById('botlist-add-btn');
+    const addInput = document.getElementById('botlist-add');
+    if (addBtn) addBtn.addEventListener('click', _addMarkedBot);
+    const srcBtn = document.getElementById('source-add-btn');
+    if (srcBtn) srcBtn.addEventListener('click', _addSource);
+    if (addInput) addInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') _addMarkedBot();
     });
 
     // Reveal all

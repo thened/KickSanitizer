@@ -120,6 +120,11 @@ KS.PageFilters = (function () {
       },
     },
     {
+      key: 'page_hideNotifications',
+      reason: 'notifications',
+      find() { return _dedup(KS.Sel.findAll(KS.Sel.notificationsRegion)); },
+    },
+    {
       key: 'page_hideAutoplayOverlays',
       reason: 'autoplay',
       find() {
@@ -187,6 +192,36 @@ KS.PageFilters = (function () {
         && (span.textContent || '').trim().toUpperCase() === 'LIVE';
       if (isLive) span.dataset.ksLame = '1';
       else delete span.dataset.ksLame;
+    }
+  }
+
+  // Kicks pills below the threshold.
+  //
+  // chat_kicksMinAmount only ever applied to KickBot's chat lines. The pill
+  // strip above chat is a separate surface that never went through the message
+  // filters at all, so a threshold set to hide small Kicks still left every
+  // small contribution sitting above the chat.
+  //
+  // Re-run on every scan: pills appear and expire on their own countdown.
+  function _applyKicksPills() {
+    const min = Number(_settings && _settings.chat_kicksMinAmount) || 0;
+    const pills = KS.Sel.findAll(KS.Sel.kicksPill);
+
+    for (const pill of pills) {
+      if (!_settings || !_settings.enabled || min <= 0) {
+        if (pill.dataset.ksHidden === 'kicks-pill') delete pill.dataset.ksHidden;
+        continue;
+      }
+      const span = pill.querySelector('span[title]');
+      const raw = span && span.getAttribute('title');
+      const amount = /^\d+$/.test(String(raw || '')) ? parseInt(raw, 10) : NaN;
+
+      // An unreadable amount is left alone. Hiding something we could not price
+      // would be worse than showing a small one.
+      if (!Number.isFinite(amount)) continue;
+
+      if (amount < min) _hideEl(pill, 'kicks-pill');
+      else if (pill.dataset.ksHidden === 'kicks-pill') delete pill.dataset.ksHidden;
     }
   }
 
@@ -466,6 +501,7 @@ KS.PageFilters = (function () {
     // one, and that guard only works if the attribute is already there.
     _applyViewerCounts();
     _markLiveBadges(lame);
+    _applyKicksPills();
     _applyBanNotice();
     if (!settings.enabled) { restoreAll(); return; }
 
@@ -541,6 +577,7 @@ KS.PageFilters = (function () {
     }
     _applyViewerCounts();
     _markLiveBadges(!!_settings.page_liveSaysLame);
+    _applyKicksPills();
     _applyBanNotice();
     _applyChannelBlocklist(_settings);
   }

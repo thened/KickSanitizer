@@ -238,3 +238,60 @@ nothing — they simply may not have spoken. If rows do survive with
 `display: none`, the guard is load-bearing and it becomes worth finding the
 endpoint behind the Muted Users panel so the mirror can filter by username
 directly rather than depending on Kick's CSS staying the same.
+
+## Bot list sources — what a server has to serve
+
+No server exists yet. `bots.nedbot.site` ships as a preset with both flags off;
+it is a suggestion, not a connection.
+
+Two endpoints, both plain JSON. No CORS headers needed: the fetches run in the
+service worker, not the content script, so page-origin CORS does not apply.
+
+### `GET /bots.json`
+
+Optional `?since=YYYY-MM-DD`. Absent means "send everything".
+
+```json
+{
+  "through": "2026-08-17",
+  "bots": [
+    { "username": "spammer1", "added": "2026-08-01" },
+    { "username": "spammer2", "added": "2026-08-14" }
+  ],
+  "removed": ["namecleared"]
+}
+```
+
+A bare array is also accepted, and entries may be plain strings — a source with
+no dates works, it just cannot be fetched incrementally.
+
+Details that matter:
+
+- **`through` is the server's own date**, echoed back as `since` on the next
+  pull. Sending the server's value rather than ours avoids clock skew: the
+  client's idea of today may not match, and an incremental feed keyed on the
+  wrong date silently skips entries.
+- **`removed` is the only way a name comes off** an incremental feed. Without
+  it a source could add for ever and never retract, and someone wrongly listed
+  would be stuck.
+- **A full response replaces that source's contribution**; an incremental one
+  is layered onto it. Each source's names are tracked separately so one going
+  away removes only its own entries.
+- **A failed pull keeps the last known names.** A server being down must not
+  empty the list.
+- Capped at 5000 names per source, 10 sources.
+
+### `POST /report`
+
+```json
+{ "username": "spammer1" }
+```
+
+That is the whole payload — no message text, no channel, no identity of the
+reporter. Any 2xx counts as accepted.
+
+**A report is a report, not an entry.** What reaches `bots.json` is the
+server's decision. A list that publishes reports directly is a harassment
+tool: anyone could make anyone invisible to every install. Whatever stands
+this up needs a threshold of distinct reporters, a moderation step, and a way
+to get removed.

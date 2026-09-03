@@ -22,7 +22,59 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 // The fallback carries the channel slug in the query string: a detached popup
 // window is its own "current window", so popup.js's active-tab lookup cannot
 // find the Kick tab to ask which channel is in view.
+// ── Bot list network, done HERE rather than in the content script ──────────
+//
+// Content-script fetches in MV3 are subject to CORS as the PAGE's origin, so a
+// request to a list server from a kick.com page would need that server to send
+// the right headers and handle a preflight. The service worker is not subject
+// to page CORS and host permissions apply to it directly — so routing through
+// here means a list server can be a plain static file plus a POST handler, with
+// nothing extension-specific to configure and nothing that breaks when someone
+// edits a header.
+//
+// The URL is re-validated here rather than trusted from the caller. The worker
+// is what holds the permissions; it should not fetch an arbitrary address just
+// because something asked it to.
+function _validBase(url) {
+  const raw = String(url || '').trim().replace(/\/+$/, '');
+  return /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(raw) ? raw : null;
+}
+
+function _pullList(url, since) {
+  const base = _validBase(url);
+  if (!base) return Promise.resolve({ ok: false, error: 'bad url' });
+  // ISO date only, and built here rather than passed through: a caller-supplied
+  // query string would let the rest of the URL be rewritten.
+  const q = /^\d{4}-\d{2}-\d{2}$/.test(String(since || ''))
+    ? '?since=' + encodeURIComponent(since) : '';
+  return fetch(base + '/bots.json' + q, { headers: { Accept: 'application/json' } })
+    .then(r => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+    .then(data => ({ ok: true, data }))
+    .catch(e => ({ ok: false, error: String(e.message || e) }));
+}
+
+function _report(url, username) {
+  const base = _validBase(url);
+  const user = String(username || '').trim().toLowerCase();
+  if (!base || !user) return Promise.resolve({ ok: false, error: 'bad request' });
+  return fetch(base + '/report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: user }),
+  })
+    .then(r => ({ ok: r.ok, status: r.status }))
+    .catch(e => ({ ok: false, error: String(e.message || e) }));
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === 'KS_BOTS_PULL') {
+    _pullList(msg.url, msg.since).then(sendResponse);
+    return true;              // async response
+  }
+  if (msg && msg.type === 'KS_BOTS_REPORT') {
+    _report(msg.url, msg.username).then(sendResponse);
+    return true;
+  }
   if (msg && msg.type === 'OPEN_POPUP') {
     let slug = '';
     try {

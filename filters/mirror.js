@@ -406,11 +406,23 @@ KS.Mirror = (function () {
           if (box === _bar || box === _host) continue;   // ours, not Kick's
 
           const pr = box.getBoundingClientRect();
-          if (!pr.height || pr.bottom <= cr.top) continue;
+          if (!pr.height) continue;
+
+          // Only overlays STACKED AT THE TOP of the column reserve space.
+          //
+          // This measured `pr.bottom - cr.top` — the distance from the column's
+          // top to the overlay's bottom — which equals its height only when the
+          // overlay is flush at the top. Anything matching further down the
+          // column produced a huge value instead, and the list was pushed down
+          // by whatever that came to, up to the 60% cap. Reserving space for an
+          // element that is not above the list is never right.
+          const TOP_TOLERANCE = 12;
+          if (pr.top > cr.top + TOP_TOLERANCE) continue;
+
           // Capped: an overlay taller than 60% of the column would leave the
           // list unusable, and at that point covering it is the lesser evil.
           pinnedH = Math.max(pinnedH,
-            Math.ceil(Math.min(pr.bottom - cr.top, cr.height * 0.6)));
+            Math.ceil(Math.min(pr.height, cr.height * 0.6)));
         }
       }
     }
