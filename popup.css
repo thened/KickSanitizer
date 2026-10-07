@@ -414,6 +414,7 @@ input[type="radio"] {
 .ks-recipe-edit input:focus,
 .ks-recipe-share textarea:focus { border-color: var(--green-border); }
 .ks-recipe-edit .ks-recipe-actions { grid-column: 1 / -1; }
+.ks-recipe-edit select { width: 100%; }
 .ks-recipe-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
 .ks-recipe-share { margin: 6px 0; font-size: 11.5px; }
 .ks-recipe-share summary { cursor: pointer; color: var(--text-muted); }

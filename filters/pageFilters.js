@@ -558,6 +558,8 @@ KS.PageFilters = (function () {
     // not hide one, so there is nothing to find or restore.
     const lame = !!(settings.enabled && settings.page_liveSaysLame);
     document.body.classList.toggle('ks-lame', lame);
+    // Same kind of thing: a "BETA" tag under the logo, as Kick's logo once had.
+    document.body.classList.toggle('ks-beta-logo', !!(settings.enabled && settings.page_betaLogo));
     _syncViewerTimer();
     // Viewer counts first: _markLiveBadges refuses to touch a badge that has
     // one, and that guard only works if the attribute is already there.

@@ -1,10 +1,10 @@
-// botRecipes.js — user-editable rules for hiding some of a bot's messages.
+// botRecipes.js — user-editable rules that hide or highlight chat messages.
 //
 // A bot that does many jobs is all-or-nothing to block, and people usually
 // object to one job rather than the bot. A recipe is a named set of rules, each
-// matching one account's messages by what they start with, end with, or
-// contain. Recipes can be limited to channels, edited freely, and shared as
-// plain text.
+// matching one account's messages — or anyone's, with account "*" — by what
+// they start with, end with, or contain, and then hiding or highlighting them.
+// Recipes can be limited to channels, edited freely, and shared as plain text.
 //
 // Shared as READABLE JSON rather than an encoded blob, on purpose: someone
 // pasting a recipe from chat can see exactly what it hides before they add it.
@@ -28,7 +28,9 @@ KS.BotRecipes = (function () {
   const MAX_MARKERS = 12;
   const MAX_TEXT = 40;
 
-  const ACCOUNT_RE = /^[a-z0-9_]{1,25}$/;
+  // "*" is anyone: a word or spoiler mute rather than a per-bot rule.
+  const ACCOUNT_RE = /^(\*|[a-z0-9_]{1,25})$/;
+  const ACTIONS = ['hide', 'highlight'];
   const CHANNEL_RE = /^[a-z0-9_-]{1,30}$/;
 
   // NedBot's categories, measured from its own output (400 messages,
@@ -81,7 +83,10 @@ KS.BotRecipes = (function () {
       start: _list(r.start),
       end: _list(r.end),
       contains: _list(r.contains),
-      hide: r.hide === true,
+      action: ACTIONS.includes(r.action) ? r.action : 'hide',
+      // The switch was called `hide` while hiding was the only action. Read
+      // either, write `on`: recipes shared before the rename still load.
+      on: r.on === true || r.hide === true,
     };
     // A rule with nothing to match would either do nothing or, worse, read as
     // "everything" to someone skimming it.
@@ -136,19 +141,35 @@ KS.BotRecipes = (function () {
     return false;
   }
 
-  // `channel` is the current channel slug, or null off a channel page.
-  function isHidden(username, text, recipes, channel) {
-    if (!username || !text || !Array.isArray(recipes) || !recipes.length) return false;
+  // The first switched-on rule with `action` that matches, as
+  // { recipe, rule, label } (indices into `recipes`), or null. `channel` is the
+  // current channel slug, or null off a channel page. A rule from before
+  // actions existed has no `action` and is a hide rule.
+  function find(username, text, recipes, channel, action) {
+    if (!username || !text || !Array.isArray(recipes) || !recipes.length) return null;
     const user = String(username).toLowerCase();
     const here = channel ? String(channel).toLowerCase() : null;
-    for (const recipe of recipes) {
+    for (let ri = 0; ri < recipes.length; ri++) {
+      const recipe = recipes[ri];
       if (!recipe || !Array.isArray(recipe.rules)) continue;
       if (recipe.channels && recipe.channels.length && !(here && recipe.channels.includes(here))) continue;
-      for (const rule of recipe.rules) {
-        if (rule && rule.hide && rule.account === user && ruleMatches(rule, text)) return true;
+      for (let i = 0; i < recipe.rules.length; i++) {
+        const rule = recipe.rules[i];
+        if (!rule || !(rule.on || rule.hide)) continue;
+        if ((rule.action || 'hide') !== action) continue;
+        if (rule.account !== '*' && rule.account !== user) continue;
+        if (ruleMatches(rule, text)) return { recipe: ri, rule: i, label: rule.label };
       }
     }
-    return false;
+    return null;
+  }
+
+  function isHidden(username, text, recipes, channel) {
+    return !!find(username, text, recipes, channel, 'hide');
+  }
+
+  function highlightOf(username, text, recipes, channel) {
+    return find(username, text, recipes, channel, 'highlight');
   }
 
   // ── Sharing ────────────────────────────────────────────────────────────────
@@ -163,7 +184,8 @@ KS.BotRecipes = (function () {
       if (rule.start.length) out.start = rule.start;
       if (rule.end.length) out.end = rule.end;
       if (rule.contains.length) out.contains = rule.contains;
-      if (rule.hide) out.hide = true;
+      if (rule.action !== 'hide') out.action = rule.action;
+      if (rule.on) out.on = true;
       return out;
     });
     return JSON.stringify({ kickSanitizerRecipe: FORMAT, name: r.name, channels: r.channels, rules });
@@ -183,5 +205,5 @@ KS.BotRecipes = (function () {
     return recipe;
   }
 
-  return { defaults, normalise, isHidden, ruleMatches, serialise, parse };
+  return { defaults, normalise, find, isHidden, highlightOf, ruleMatches, serialise, parse };
 })();

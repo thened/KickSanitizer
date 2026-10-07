@@ -179,7 +179,24 @@ KS.ChatFilters = (function () {
     // channel, and every filter here could swallow it — a short reply, a
     // repeated one, an all-caps one, a bot answering a command you ran. This
     // check runs before all of them and short-circuits to the mirror.
+    // Highlights — recipe rules and liked people. Set before any route to the
+    // mirror: the mirror clones the row, attributes and all, and never looks
+    // again.
+    _applyHighlight(msgEl, s);
+
+    // Disliked people go first, ahead even of the mention pass: like Kick's
+    // mute, you asked not to see them, and that includes them talking to you.
+    if (_isDisliked(getUsername(msgEl), s)) {
+      return _hide(msgEl, 'disliked');
+    }
+
     if (s.chat_neverFilterMentions !== false && _mentionsMe(getMessageText(msgEl))) {
+      if (!msgEl.dataset.ksHidden && window.KS && KS.Mirror) KS.Mirror.ingest(msgEl);
+      return;
+    }
+
+    // Liked people get the same pass as a mention.
+    if (_isLiked(getUsername(msgEl), s)) {
       if (!msgEl.dataset.ksHidden && window.KS && KS.Mirror) KS.Mirror.ingest(msgEl);
       return;
     }
@@ -228,9 +245,12 @@ KS.ChatFilters = (function () {
     const text = getMessageText(msgEl);
     const username = getUsername(msgEl);
 
-    // Bot recipes: some of a bot's jobs rather than the whole bot.
-    if (_isRecipeHidden(username, _tagText(msgEl), s)) {
-      return _hide(msgEl, 'bot-category');
+    // Recipes: some of a bot's jobs rather than the whole bot, or a word muted
+    // for everyone. The rule travels with the hide so the panel can offer to
+    // switch off that rule rather than every recipe.
+    const recipeHit = _recipeHit(username, _tagText(msgEl), s, 'hide');
+    if (recipeHit) {
+      return _hide(msgEl, 'bot-category', recipeHit);
     }
 
     // Emote-only
@@ -306,10 +326,12 @@ KS.ChatFilters = (function () {
       // them as same-instant repeats wipes the visible chat. Record them so
       // genuinely new repeats are still caught, but don't hide them.
       const _retro = _bulkScan && _firstSeen;
-      if (!_retro && _isDuplicate(username, text, s, _seenAt)) {
+      const said = _socketSaid(username, text, s);
+      const id = _messageId(msgEl, username, text);
+      if (!_retro && said !== 1 && _isDuplicate(username, text, s, _seenAt, id, said >= 2)) {
         return _hide(msgEl, 'duplicate');
       }
-      _recordMessage(username, text, s, _seenAt);
+      _recordMessage(username, text, s, _seenAt, id);
     }
 
     // Global copypasta
@@ -328,7 +350,12 @@ KS.ChatFilters = (function () {
   // `at` is the message's own first-seen time, not wall-clock now. Using
   // Date.now() here meant a re-scan compared every buffered message against a
   // window anchored at the scan moment, so the whole backlog counted as recent.
-  function _isDuplicate(username, text, s, at) {
+  // `id` is who + Kick's timestamp + text: the same message re-rendered by the
+  // virtualiser carries the same id, so it is never its own duplicate. Kick's
+  // timestamp is to the minute, so a genuine repeat within the same minute
+  // shares the id too — those are caught only when the socket confirms two
+  // arrivals (`confirmed`). Missing one is the safe way to be wrong.
+  function _isDuplicate(username, text, s, at, id, confirmed) {
     // Emote-only and sticker rows normalize to '' — without this guard every
     // such message from a user is "identical" to the last one and gets hidden.
     // _processCopypasta already guards this way; this path did not.
@@ -337,14 +364,18 @@ KS.ChatFilters = (function () {
     const now = at || Date.now();
     const history = _dupeHistory.get(username) || [];
     const mode = s.chat_similarityMode || 'normalized';
-    return history.some(e => (now - e.timestamp < windowMs) && KS.Normalize.areSimilar(e.text, text, mode));
+    return history.some(e => (now - e.timestamp < windowMs)
+      && (confirmed || !id || e.id !== id)
+      && KS.Normalize.areSimilar(e.text, text, mode));
   }
 
-  function _recordMessage(username, text, s, at) {
+  function _recordMessage(username, text, s, at, id) {
     const windowMs = (s.chat_duplicateWindowSeconds || 30) * 1000;
     const now = at || Date.now();
     let history = (_dupeHistory.get(username) || []).filter(e => now - e.timestamp < windowMs);
-    history.push({ text, timestamp: now });
+    // A re-render of a message already recorded is not a second message.
+    if (id && history.some(e => e.id === id)) return;
+    history.push({ text, timestamp: now, id });
     if (history.length > 100) history = history.slice(-100);
     _dupeHistory.set(username, history);
   }
@@ -430,9 +461,22 @@ KS.ChatFilters = (function () {
   // Hiding some of a bot's messages by category. The rules are user data — see
   // utils/botRecipes.js — so this file only supplies the text to match.
 
+  function _recipeHit(username, text, s, action) {
+    if (!KS.BotRecipes || !s) return null;
+    return KS.BotRecipes.find(username, text, s.botRecipes, KS.Sel.getCurrentChannel(), action);
+  }
+
   function _isRecipeHidden(username, text, s) {
-    return !!(KS.BotRecipes && s
-      && KS.BotRecipes.isHidden(username, text, s.botRecipes, KS.Sel.getCurrentChannel()));
+    return !!_recipeHit(username, text, s, 'hide');
+  }
+
+  function _applyHighlight(msgEl, s) {
+    const user = getUsername(msgEl);
+    const hit = _recipeHit(user, _tagText(msgEl), s, 'highlight');
+    if (hit) msgEl.dataset.ksHighlight = hit.label;
+    else delete msgEl.dataset.ksHighlight;
+    if (_isLiked(user, s)) msgEl.dataset.ksLiked = '1';
+    else delete msgEl.dataset.ksLiked;
   }
 
   // The message as text, reading an image's alt where text would be. Emoji may
@@ -755,7 +799,10 @@ KS.ChatFilters = (function () {
 
     // A message that mentions you is never filtered, whatever else it trips —
     // must match the DOM path or the count would disagree with the screen.
+    // Same order as the DOM path, so the count agrees with the screen.
+    if (_isDisliked(user, s)) return true;
     if (s.chat_neverFilterMentions !== false && _mentionsMe(raw)) return false;
+    if (_isLiked(user, s)) return false;
 
     if (_isRecipeHidden(user, raw, s)) return true;
     if (s.chat_hideEmoteOnly && ((emotes > 0 && !text) || KS.Normalize.isEmojiOnly(text))) return true;
@@ -787,11 +834,61 @@ KS.ChatFilters = (function () {
   }
 
   // Called for every chat message the socket delivers.
+  // How many times the socket has delivered this person saying this text.
+  //
+  // Ground truth for "did they actually say it twice". The DOM cannot answer
+  // that: Kick's virtualiser re-renders a row as a fresh element, and the
+  // duplicate check took the re-render for a second message and hid the
+  // message as a duplicate of ITSELF. Found by the filtered-messages panel —
+  // on Ice, unique sentences said once ("solo ice > event") were logged as
+  // Duplicates. Clean chat already held them, so the damage there was a false
+  // log entry; in Kick-chat mode the re-rendered row really vanished.
+  const SAID_KEEP_MS = 10 * 60 * 1000;
+  const _sockSaid = new Map();        // user|normalised text -> [arrival ms]
+
+  function _saidKey(user, text) {
+    const t = KS.Normalize.text(String(text || '').replace(EMOTE_RE, ' '));
+    return t ? String(user || '').toLowerCase() + '|' + t : null;
+  }
+
+  function _recordSaid(user, content) {
+    const key = _saidKey(user, content);
+    if (!key) return;
+    const now = Date.now();
+    const list = (_sockSaid.get(key) || []).filter(t => now - t < SAID_KEEP_MS);
+    list.push(now);
+    _sockSaid.set(key, list);
+    if (_sockSaid.size > 6000) {
+      for (const [k, v] of _sockSaid) if (!v.length || now - v[v.length - 1] > SAID_KEEP_MS) _sockSaid.delete(k);
+    }
+  }
+
+  // How many times the socket delivered this, within the duplicate window.
+  // 1 proves a single message, whatever the DOM rendered. 0 means the socket
+  // cannot say — history loaded with the page arrives before it connects, and
+  // Kick's socket can beat ours — so the message identity has to decide.
+  function _socketSaid(user, text, s) {
+    const key = _saidKey(user, text);
+    if (!key) return 0;
+    const windowMs = (s.chat_duplicateWindowSeconds || 30) * 1000;
+    const now = Date.now();
+    return (_sockSaid.get(key) || []).filter(t => now - t < windowMs).length;
+  }
+
+  // Who + Kick's own timestamp + text. Stable across re-renders of one
+  // message, which an element reference and data-index are not.
+  function _messageId(msgEl, user, text) {
+    const ts = msgEl.querySelector('[style*="var(--chatroom-timestamps-display"]');
+    const time = ts ? ts.textContent.trim() : '';
+    return time ? String(user || '').toLowerCase() + '|' + time + '|' + text : null;
+  }
+
   function countSocketMessage(msg) {
     if (!msg || !msg.id || !_settings || !_settings.enabled) return;
     if (_sockCounted.has(msg.id)) return;      // the whole point: ids are unique
     _sockCounted.add(msg.id);
     _sockSeen++;
+    try { _recordSaid(msg.username, msg.content); } catch (_) { /* never break counting */ }
     if (_sockCounted.size > 20000) {
       const oldest = _sockCounted.values().next().value;
       if (oldest !== undefined) _sockCounted.delete(oldest);
@@ -820,15 +917,187 @@ KS.ChatFilters = (function () {
     _sockCounted.clear();
     _sockTotal = 0;
     _sockSeen = 0;
+    // The log belongs to the channel it was filtered in.
+    _hiddenLog.length = 0;
+    _hiddenLogVersion++;
   }
 
-  function _hide(el, reason) {
+  function _hide(el, reason, detail) {
     // Count only the not-hidden -> hidden transition; processMessage can be
     // called again for the same element and we do not want to double-count.
     if (!el.dataset.ksHidden) {
       if (window.KS && KS.Stats) KS.Stats.count(reason);
+      _logHidden(el, reason, detail);
     }
     el.dataset.ksHidden = reason;
+  }
+
+  // ── What got filtered ───────────────────────────────────────────────────────
+  //
+  // On a busy channel most of chat is filtered, and none of it was visible —
+  // so a real message wrongly caught as a duplicate simply vanished, and a bad
+  // rule could not be noticed. The last few hides are kept here, with why, for
+  // the panel behind the counter.
+  //
+  // Keyed on user + Kick's timestamp + text rather than the element: the
+  // virtualiser recreates rows, and each recreation would otherwise log the
+  // same message again.
+  const HIDDEN_LOG_MAX = 50;
+  const _hiddenLog = [];
+  let _hiddenLogVersion = 0;
+
+  function _logHidden(el, reason, detail) {
+    try {
+      const user = getUsername(el) || '';
+      // _tagText rather than textContent: an emote-only message has no text,
+      // and showing the emote names says what it actually was.
+      const text = _tagText(el).replace(/\s+/g, ' ').trim().slice(0, 300);
+      const ts = el.querySelector('[style*="var(--chatroom-timestamps-display"]');
+      const time = ts ? ts.textContent.trim() : '';
+      const key = user + '|' + time + '|' + text;
+      if (_hiddenLog.some(e => e.key === key)) return;
+      _hiddenLog.unshift({ key, user, text, time, reason, detail: detail || null });
+      if (_hiddenLog.length > HIDDEN_LOG_MAX) _hiddenLog.pop();
+      _hiddenLogVersion++;
+    } catch (_) { /* a log must never break filtering */ }
+  }
+
+  function recentHidden() {
+    return { version: _hiddenLogVersion, items: _hiddenLog.slice() };
+  }
+
+  // Each reason, what to call it, and the setting that turns it off. `key` may
+  // be a list where one reason has more than one source. Reasons with no key
+  // (a marked bot) are left to "Trust user".
+  const REASONS = {
+    'duplicate':      { label: 'Duplicates',            key: 'chat_hideDuplicates',          off: false },
+    'emote-only':     { label: 'Emote-only',            key: 'chat_hideEmoteOnly',           off: false },
+    'max-emotes':     { label: 'Too many emotes',       key: 'chat_maxEmotes',               off: 0 },
+    'level-up':       { label: 'Level-ups',             key: 'chat_hideLevelUps',            off: false },
+    'burst-spam':     { label: 'Coordinated spam',      key: 'chat_hideBurstSpam',           off: false },
+    'bot-command':    { label: 'Bot commands',          key: 'chat_hideBotCommands',         off: false },
+    'too-short':      { label: 'Short messages',        key: 'chat_minMessageLength',        off: 0 },
+    'bot-game':       { label: 'Chat games',            key: 'chat_hideBotGames',            off: false },
+    'all-caps':       { label: 'All caps',              key: 'chat_hideAllCaps',             off: false },
+    'repeated-chars': { label: 'Repeated characters',   key: 'chat_hideRepeatedChars',       off: false },
+    'link':           { label: 'Links',                 key: 'chat_hideLinks',               off: false },
+    'copypasta':      { label: 'Copypasta',             key: 'chat_collapseGlobalCopypasta', off: false },
+    'gifted-sub':     { label: 'Gifted-sub notices',    key: ['chat_hideGiftedSubNotices', 'chat_collapseGiftedSubs'], off: false },
+    'sub-notice':     { label: 'Sub notices',           key: 'chat_hideSubscriptionNotices', off: false },
+    'follow-notice':  { label: 'Follow notices',        key: 'chat_hideFollowNotices',       off: false },
+    'redemption':     { label: 'Redemptions',           key: 'chat_hideRedemptions',         off: false },
+    'kicks-spam':     { label: 'Small Kicks',           key: 'chat_kicksMinAmount',          off: 0 },
+    'mizkif':         { label: 'Mizkif mode',           key: 'chat_mizkifMode',              off: false },
+    'marked-bot':     { label: 'Marked bot' },
+    'bot-category':   { label: 'Recipe' },
+    'disliked':       { label: 'Disliked' },
+  };
+
+  function reasonLabel(entry) {
+    if (entry.reason === 'bot-category' && entry.detail) return 'Recipe: ' + entry.detail.label;
+    return (REASONS[entry.reason] && REASONS[entry.reason].label) || entry.reason;
+  }
+
+  // Can "stop filtering this kind" do anything for this entry?
+  function canStop(entry) {
+    if (entry.reason === 'disliked') return !!entry.user;
+    if (entry.reason === 'bot-category') return !!entry.detail;
+    return !!(REASONS[entry.reason] && REASONS[entry.reason].key);
+  }
+
+  // Turn off whatever hid `entry`: the one recipe rule, or the filter.
+  function stopFiltering(entry) {
+    if (!_settings || !KS.updateSettings) return false;
+
+    if (entry.reason === 'disliked') return undislikeUser(entry.user);
+
+    if (entry.reason === 'bot-category' && entry.detail) {
+      const recipes = JSON.parse(JSON.stringify(_settings.botRecipes || []));
+      // Indices were taken when the message was hidden; the recipes may have
+      // been edited since, so only trust them if the label still agrees, and
+      // otherwise look the rule up by label.
+      let rule = (recipes[entry.detail.recipe] || { rules: [] }).rules[entry.detail.rule];
+      if (!rule || rule.label !== entry.detail.label) {
+        rule = null;
+        for (const r of recipes) for (const x of r.rules || []) {
+          if (!rule && x.label === entry.detail.label && (x.on || x.hide)) rule = x;
+        }
+      }
+      if (!rule) return false;
+      rule.on = false;
+      delete rule.hide;
+      KS.updateSettings({ botRecipes: recipes });
+      return true;
+    }
+
+    const r = REASONS[entry.reason];
+    if (!r || !r.key) return false;
+    const channel = KS.Sel.getCurrentChannel();
+    const overrides = channel && _settings.channelOverrides && _settings.channelOverrides[channel];
+    const global = {};
+    for (const key of [].concat(r.key)) {
+      // A per-channel override would shadow a global change, and the filter
+      // would carry on as if nothing had been clicked.
+      if (overrides && key in overrides && KS.setChannelOverride) KS.setChannelOverride(channel, key, r.off);
+      else global[key] = r.off;
+    }
+    if (Object.keys(global).length) KS.updateSettings(global);
+    return true;
+  }
+
+  // ── Liked and disliked people ───────────────────────────────────────────────
+  //
+  // Liked: never filtered (the same pass a mention gets) and highlighted.
+  // Disliked: every message hidden, like Kick's mute.
+  //
+  // Kick keeps mutes in this browser's localStorage and nowhere else, so they
+  // do not follow you to another browser or machine. These lists go through
+  // settings export and import. Deliberately separate from marked BOTS: a
+  // marked bot can be reported to a shared list, and disliking a person must
+  // never send their name anywhere.
+  const NAME_RE = /^[a-z0-9_]{1,25}$/;
+
+  function _people(key) {
+    const list = _settings && _settings[key];
+    return Array.isArray(list) ? list : [];
+  }
+
+  function _inList(username, s, key) {
+    return !!(username && s && Array.isArray(s[key])
+      && s[key].includes(String(username).toLowerCase()));
+  }
+
+  function _isLiked(username, s) { return _inList(username, s, 'likedChatters'); }
+  function _isDisliked(username, s) { return _inList(username, s, 'ignoredChatters'); }
+
+  // Liking someone un-dislikes them and vice versa — being on both lists has
+  // no sensible meaning.
+  function _setPerson(name, key, on) {
+    const user = String(name || '').trim().toLowerCase().replace(/^@/, '');
+    if (!NAME_RE.test(user) || !KS.updateSettings) return false;
+    const other = key === 'likedChatters' ? 'ignoredChatters' : 'likedChatters';
+    const list = _people(key).filter(n => n !== user);
+    if (on) list.push(user);
+    const changes = { [key]: list };
+    if (on && _people(other).includes(user)) changes[other] = _people(other).filter(n => n !== user);
+    // Applied in memory at once, not when storage echoes back: the click's
+    // own row update reads this straight away, the next message must be judged
+    // by it, and a second quick click must build on the first, not overwrite it.
+    if (_settings) Object.assign(_settings, changes);
+    KS.updateSettings(changes);
+    return true;
+  }
+
+  function likeUser(name)    { return _setPerson(name, 'likedChatters', true); }
+  function unlikeUser(name)  { return _setPerson(name, 'likedChatters', false); }
+  function dislikeUser(name) { return _setPerson(name, 'ignoredChatters', true); }
+  function undislikeUser(name) { return _setPerson(name, 'ignoredChatters', false); }
+
+  function personState(name) {
+    const user = String(name || '').toLowerCase();
+    if (_people('likedChatters').includes(user)) return 'liked';
+    if (_people('ignoredChatters').includes(user)) return 'disliked';
+    return null;
   }
 
   function _show(el) {
@@ -993,6 +1262,15 @@ KS.ChatFilters = (function () {
     countSocketMessage,
     socketStats,
     resetCounts,
+    recentHidden,
+    reasonLabel,
+    canStop,
+    stopFiltering,
+    likeUser,
+    unlikeUser,
+    dislikeUser,
+    undislikeUser,
+    personState,
     _mentionsMe,
     _isKicksNotice,
     _getKicksAmount,

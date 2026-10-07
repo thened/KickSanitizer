@@ -349,6 +349,13 @@
     </label>
     <input type="checkbox" id="page-lame" data-key="page_liveSaysLame">
   </div>
+  <div class="ks-row">
+    <label for="page-beta">
+      BETA under the Kick logo
+      <span class="ks-hint">The way the logo used to look. Purely cosmetic</span>
+    </label>
+    <input type="checkbox" id="page-beta" data-key="page_betaLogo">
+  </div>
   
   <div class="ks-row">
     <label for="page-kicks">
@@ -460,8 +467,20 @@
   </div>
   <div id="botlist-container"></div>
 
-  <div class="ks-section-title">Bot recipes</div>
-  <p class="ks-hint" style="margin-bottom:6px">Hide some of a bot's jobs without blocking it. Switch on what to hide; ✎ changes what a rule matches. Messages that mention you always show.</p>
+  <div class="ks-section-title">Liked &amp; disliked</div>
+  <p class="ks-hint" style="margin-bottom:6px">Liked people are highlighted and never filtered; disliked people are hidden. Click someone's name in chat and use 👍 / 👎 on their card, or add a name here. Unlike Kick's mute, these travel with Export / Import settings.</p>
+  <div class="ks-row">
+    <input type="text" id="person-add" placeholder="username" style="flex:1 1 auto;min-width:0">
+    <button class="ks-link-btn" id="person-like-btn">👍 Like</button>
+    <button class="ks-link-btn" id="person-dislike-btn">👎 Dislike</button>
+  </div>
+  <div class="ks-recipe-where" style="margin-top:4px">Liked</div>
+  <div id="liked-container"></div>
+  <div class="ks-recipe-where" style="margin-top:4px">Disliked</div>
+  <div id="disliked-container"></div>
+
+  <div class="ks-section-title">Recipes</div>
+  <p class="ks-hint" style="margin-bottom:6px">Hide or highlight messages by what they start with, end with or contain — some of a bot's jobs, or a word from anyone (account <code>*</code>). Switch a rule on to use it; ✎ changes it. Messages that mention you always show.</p>
   <div id="recipes-container"></div>
   <div class="ks-recipe-actions">
     <button class="ks-link-btn" id="recipe-new">New recipe</button>

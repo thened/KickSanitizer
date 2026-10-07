@@ -40,6 +40,7 @@
 
       KS.ChatFilters.init(_settings);
       KS.PageFilters.init(_settings);
+      if (KS.PersonCard) KS.PersonCard.init(_settings);
 
       _applyTimestamps(_settings.chat_showTimestamps);
 
@@ -241,6 +242,7 @@
       _settings = settings;
       KS.ChatFilters.init(_settings);
       KS.PageFilters.update(_settings);
+      if (KS.PersonCard) KS.PersonCard.update(_settings);
       _applyTimestamps(_settings.chat_showTimestamps);
       setTimeout(() => {
         if (KS.Mirror) KS.Mirror.init(_settings);   // remount + resubscribe
@@ -264,9 +266,11 @@
       if (!_settings.enabled) {
         KS.ChatFilters.restoreAll();
         KS.PageFilters.restoreAll();
+        if (KS.PersonCard) KS.PersonCard.update(_settings);   // removes the card row
         if (KS.Mirror) KS.Mirror.update(_settings);   // tears down mirror + bar
       } else {
         KS.PageFilters.update(_settings);
+        if (KS.PersonCard) KS.PersonCard.update(_settings);
         if (KS.Mirror) KS.Mirror.update(_settings);
         // Reset before re-scanning. Without this, scanExisting() re-checks every
         // already-processed message against a _dupeHistory that still contains
@@ -719,6 +723,9 @@
         topFrame: window.top === window.self,
         enabled: !!(_settings && _settings.enabled),
         cleanChat: !!(_settings && _settings.chat_mirrorMode),
+        // The extension's id, so the settings page can be opened directly
+        // (chrome-extension://<id>/popup.html) when testing from another tab.
+        ext: (chrome.runtime && chrome.runtime.id) || null,
         // Which recipe rules are switched on, as 'account: label'. Without it
         // "the recipe isn't hiding anything" cannot be told apart from "no rule
         // is on" — the popup is the only other place this state is visible.

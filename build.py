@@ -38,6 +38,7 @@ SHIP_FILES = [
     "filters/chatSocket.js",
     "filters/avatars.js",
     "filters/mirror.js",
+    "filters/personCard.js",
     "filters/pageFilters.js",
     "icons/icon16.png",
     "icons/icon48.png",

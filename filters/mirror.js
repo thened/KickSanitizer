@@ -474,6 +474,7 @@ KS.Mirror = (function () {
     if (_barMode === (on ? 'clean' : 'kick') && readoutsLive) {
       _updateCount();
       _updateChatters();
+      _refreshPanel();
       // Overlays come and go on Kick's schedule, not ours — a poll opening
       // mid-session used to sit on top of the bar because layout was only ever
       // recalculated when the bar itself was rebuilt. This runs on the 2s
@@ -492,6 +493,15 @@ KS.Mirror = (function () {
 
     _countEl = document.createElement('span');
     _countEl.className = 'ks-mirror-count';
+    // A span rather than a button so the odometer keeps its styling; made
+    // keyboard-reachable by hand instead.
+    _countEl.title = 'See what was filtered';
+    _countEl.setAttribute('role', 'button');
+    _countEl.tabIndex = 0;
+    _countEl.addEventListener('click', _togglePanel);
+    _countEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _togglePanel(); }
+    });
 
     const btn = document.createElement('button');
     btn.className = 'ks-mirror-btn';
@@ -654,7 +664,137 @@ KS.Mirror = (function () {
       !!(settings && settings.chat_hideOtherBadges));
   }
 
+  // ── What got filtered ───────────────────────────────────────────────────────
+  //
+  // Clicking the counter opens the last few hidden messages with the reason
+  // for each, and a way to undo that reason for the future: trust the person,
+  // or switch off the filter (or the one recipe rule) that caught it. Without
+  // this a wrong hide was invisible, and so was a bad rule.
+  //
+  // Every string here — usernames, message text, recipe labels — came from
+  // chat or from a pasted recipe, so all of it goes in as textContent.
+  let _panel = null;
+  let _panelVersion = -1;
+  let _panelHover = false;
+
+  function _togglePanel() {
+    if (_panel && _panel.isConnected) _closePanel();
+    else _openPanel();
+  }
+
+  function _closePanel() {
+    if (_panel) _panel.remove();
+    _panel = null;
+    _panelVersion = -1;
+    _panelHover = false;
+  }
+
+  function _openPanel() {
+    if (!_bar || !_bar.parentElement) return;
+    _panel = document.createElement('div');
+    _panel.className = 'ks-hidden-panel';
+    _panel.setAttribute('role', 'dialog');
+    _panel.setAttribute('aria-label', 'Recently filtered messages');
+    _panel.addEventListener('pointerenter', () => { _panelHover = true; });
+    _panel.addEventListener('pointerleave', () => { _panelHover = false; _refreshPanel(); });
+    _bar.parentElement.appendChild(_panel);
+    _positionPanel();
+    _renderPanel();
+  }
+
+  function _positionPanel() {
+    if (!_panel || !_bar) return;
+    _panel.style.top = (_bar.offsetTop + _bar.offsetHeight) + 'px';
+  }
+
+  // From the watchdog. Rebuilt only when something new was hidden, and never
+  // under the pointer: a rebuild would move a button out from under a click.
+  function _refreshPanel() {
+    if (!_panel || !_panel.isConnected) return;
+    _positionPanel();
+    if (_panelHover) return;
+    const CF = KS.ChatFilters;
+    const log = CF && CF.recentHidden ? CF.recentHidden() : null;
+    if (log && log.version !== _panelVersion) _renderPanel();
+  }
+
+  function _el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function _renderPanel() {
+    if (!_panel) return;
+    const CF = KS.ChatFilters;
+    const log = (CF && CF.recentHidden) ? CF.recentHidden() : { version: 0, items: [] };
+    _panelVersion = log.version;
+    _panel.innerHTML = '';
+
+    const head = _el('div', 'ks-hp-head');
+    head.appendChild(_el('span', 'ks-hp-title', 'Recently filtered'));
+    head.appendChild(_el('span', 'ks-hp-sub', log.items.length
+      ? 'last ' + log.items.length + ', newest first' : ''));
+    const close = _el('button', 'ks-mirror-btn', '×');
+    close.title = 'Close';
+    close.setAttribute('aria-label', 'Close');
+    close.addEventListener('click', _closePanel);
+    head.appendChild(close);
+    _panel.appendChild(head);
+
+    if (!log.items.length) {
+      _panel.appendChild(_el('p', 'ks-hp-empty', 'Nothing filtered on this channel yet.'));
+      return;
+    }
+
+    for (const item of log.items) {
+      const row = _el('div', 'ks-hp-item');
+      const meta = _el('div', 'ks-hp-meta');
+      if (item.time) meta.appendChild(_el('span', 'ks-hp-time', item.time));
+      if (item.user) meta.appendChild(_el('span', 'ks-hp-user', item.user));
+      meta.appendChild(_el('span', 'ks-hp-reason', CF.reasonLabel(item)));
+      row.appendChild(meta);
+      row.appendChild(_el('div', 'ks-hp-text', item.text || '(no text)'));
+
+      const acts = _el('div', 'ks-hp-acts');
+      const done = _el('span', 'ks-hp-done');
+      // A disliked person's entry offers only the way back; liking them from
+      // here would be the same click with a less obvious name.
+      if (item.user && item.reason !== 'disliked') {
+        const like = _el('button', 'ks-hp-btn', '👍 Like ' + item.user);
+        like.title = 'Highlight ' + item.user + ' and never filter them';
+        like.addEventListener('click', () => {
+          if (CF.likeUser(item.user)) {
+            acts.querySelectorAll('button').forEach(b => { b.disabled = true; });
+            done.textContent = 'Liked — highlighted and never filtered from now on.';
+          }
+        });
+        acts.appendChild(like);
+      }
+      if (CF.canStop(item)) {
+        const stop = _el('button', 'ks-hp-btn', item.reason === 'disliked'
+          ? 'Stop disliking ' + item.user : 'Turn off: ' + CF.reasonLabel(item));
+        stop.title = item.reason === 'bot-category' ? 'Switch off this recipe rule'
+          : item.reason === 'disliked' ? 'Show their messages again' : 'Switch off this filter';
+        stop.addEventListener('click', () => {
+          if (CF.stopFiltering(item)) {
+            acts.querySelectorAll('button').forEach(b => { b.disabled = true; });
+            done.textContent = item.reason === 'disliked'
+              ? 'No longer disliked — new messages will show.'
+              : 'Turned off. Switch it back on in the popup.';
+          }
+        });
+        acts.appendChild(stop);
+      }
+      acts.appendChild(done);
+      row.appendChild(acts);
+      _panel.appendChild(row);
+    }
+  }
+
   function _removeBar() {
+    _closePanel();
     clearInterval(_chattersTimer);
     _chattersTimer = null;
     _chattersEl = null;
@@ -1309,6 +1449,21 @@ KS.Mirror = (function () {
   // user's modal would open. We detect the common form of this by comparing the
   // username text, and simply do nothing when they no longer agree, which is
   // better than opening the wrong profile.
+  // Bring rows already on screen into line with the liked/disliked lists,
+  // without waiting for new messages: a disliked person's rows leave now, a
+  // liked person's light up. Called by the user card (personCard.js) after a
+  // click. Kick's originals are left alone — unhiding is the filters' job, and
+  // the settings change re-runs them.
+  function _applyPeople() {
+    if (!_host || !KS.ChatFilters || !KS.ChatFilters.personState) return;
+    for (const row of _host.querySelectorAll('.ks-mirror-row[data-ks-user]')) {
+      const state = KS.ChatFilters.personState(row.dataset.ksUser);
+      if (state === 'disliked') { row.remove(); continue; }
+      if (state === 'liked') row.dataset.ksLiked = '1';
+      else delete row.dataset.ksLiked;
+    }
+  }
+
   function _forwardClick(e) {
     const cloneBtn = e.target.closest && e.target.closest('button');
     if (!cloneBtn || !_host.contains(cloneBtn)) return;
@@ -1346,10 +1501,31 @@ KS.Mirror = (function () {
     // Only a text-equality guard stopped it firing, which is also why clicking
     // a username did nothing at all.
     const original = _liveOriginal(cloneRow);
-    if (!original) return;
+    let target = original
+      ? [...original.querySelectorAll('button')].find(b => b.textContent.trim() === label)
+      : null;
 
-    const target = [...original.querySelectorAll('button')]
-      .find(b => b.textContent.trim() === label);
+    // The username has two more ways to its card, because the original is
+    // usually gone. Kick renders only its last few dozen rows, and with most of
+    // chat filtered those hold just the last handful of SURVIVING messages,
+    // while clean chat keeps hundreds — measured on Ice: of 15 clean rows on
+    // screen, 6 still had an original. A dead click on a name is the worst
+    // case, now that the card is where like/dislike live.
+    const isName = cloneBtn.matches('button[data-prevent-expand]');
+    if (!target && isName) {
+      // A card is per person, not per message: any of their rendered rows will
+      // open it.
+      const list = _origList && _origList.isConnected ? _origList : KS.Sel.find(KS.Sel.chatContainer);
+      const want = label.toLowerCase();
+      target = list ? [...list.querySelectorAll('button[data-prevent-expand]')]
+        .find(b => b.textContent.trim().toLowerCase() === want) : null;
+    }
+    if (!target && isName && KS.PersonCard && KS.PersonCard.openFallback) {
+      e.preventDefault();
+      e.stopPropagation();
+      KS.PersonCard.openFallback(label, cloneBtn.getBoundingClientRect());
+      return;
+    }
     if (!target) return;
 
     e.preventDefault();
@@ -1371,5 +1547,6 @@ KS.Mirror = (function () {
     return null;
   }
 
-  return { init, update, destroy, ingest, isOn, ensureMounted, renderModeBar, applyTheme, _scrollToBottom };
+  return { init, update, destroy, ingest, isOn, ensureMounted, renderModeBar, applyTheme, _scrollToBottom,
+           applyPeople: _applyPeople };
 }());

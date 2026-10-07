@@ -1309,3 +1309,182 @@ body.ks-tube #ks-mirror .ks-mirror-row button[data-prevent-expand] {
 body.ks-tube #ks-mirror .ks-mirror-row img {
   vertical-align: middle;
 }
+
+/* ── What got filtered (panel behind the counter) ─────────────────────────────
+   Deliberately plain and unthemed: it is a tool for checking the filters, and
+   it has to stay readable over Hypnotoad. */
+.ks-mirror-count { cursor: pointer; }
+.ks-mirror-count:focus-visible { outline: 2px solid #53fc18; outline-offset: 2px; border-radius: 3px; }
+
+.ks-hidden-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  overflow-y: auto;
+  background: #141517;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  color: #e4e4e4;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 0 8px 10px;
+}
+.ks-hp-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 6px;
+  background: #141517;
+}
+.ks-hp-title { font-weight: 700; }
+.ks-hp-sub { flex: 1; color: #8a8f98; font-size: 11px; }
+.ks-hp-empty { color: #8a8f98; padding: 12px 0; }
+.ks-hp-item { padding: 7px 0; border-top: 1px solid rgba(255, 255, 255, .06); }
+.ks-hp-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.ks-hp-time { color: #8a8f98; font-size: 11px; }
+.ks-hp-user { font-weight: 700; }
+.ks-hp-reason {
+  font-size: 10.5px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: rgba(83, 252, 24, .14);
+  color: #b6f59a;
+}
+.ks-hp-text { margin: 3px 0 4px; overflow-wrap: anywhere; color: #cfd2d8; }
+.ks-hp-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ks-hp-btn {
+  background: #24272c;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 4px;
+  color: #e4e4e4;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 7px;
+}
+.ks-hp-btn:hover:not(:disabled) { border-color: rgba(83, 252, 24, .5); }
+.ks-hp-btn:disabled { opacity: .45; cursor: default; }
+.ks-hp-done { color: #b6f59a; font-size: 11px; }
+
+/* ── Recipe highlights ────────────────────────────────────────────────────────
+   LAST in the file on purpose. Themes set row backgrounds as
+   `body.ks-<theme> #ks-mirror .ks-mirror-row { … !important }`; this selector
+   has the same specificity, so coming later is what lets it win in every
+   theme, 8-bit and Hypnotoad included. An inset bar rather than a border so
+   it adds no width and cannot reflow the row. */
+body #ks-mirror .ks-mirror-row[data-ks-highlight] {
+  box-shadow: inset 3px 0 0 #53fc18 !important;
+  background-color: rgba(83, 252, 24, .12) !important;
+}
+/* Kick's own list, for anyone not using clean chat. */
+body [data-ks-highlight]:not(.ks-mirror-row) {
+  box-shadow: inset 3px 0 0 #53fc18;
+  background-color: rgba(83, 252, 24, .12);
+}
+
+/* ── Like / dislike on Kick's user card ───────────────────────────────────────
+   A row under Kick's own actions (follow, gift). Sized and coloured like
+   those, so it reads as part of the card rather than something stuck on. */
+#user-identity .ks-card-people,
+.ks-fallback-card .ks-card-people {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 2px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+#user-identity .ks-card-label,
+.ks-fallback-card .ks-card-label {
+  flex: 1;
+  font-size: 11px;
+  color: #8a8f98;
+}
+#user-identity .ks-card-btn,
+.ks-fallback-card .ks-card-btn {
+  background: #24272c;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 10px;
+}
+#user-identity .ks-card-btn:hover,
+.ks-fallback-card .ks-card-btn:hover { background: #2f3339; }
+#user-identity .ks-card-btn.ks-on,
+.ks-fallback-card .ks-card-btn.ks-on {
+  border-color: #53fc18;
+  color: #b6f59a;
+}
+
+/* Liked people: gold, so they read apart from recipe highlights (green). Last
+   in the file for the same reason as the highlight rule above. */
+body #ks-mirror .ks-mirror-row[data-ks-liked] {
+  box-shadow: inset 3px 0 0 #f5c542 !important;
+  background-color: rgba(245, 197, 66, .12) !important;
+}
+body [data-ks-liked]:not(.ks-mirror-row) {
+  box-shadow: inset 3px 0 0 #f5c542;
+  background-color: rgba(245, 197, 66, .12);
+}
+
+/* Our own card, for names whose Kick card cannot be opened. Placed and sized
+   like Kick's, and deliberately plain. */
+.ks-fallback-card {
+  position: fixed;
+  z-index: 2147483000;
+  width: 300px;
+  background: #191b1f;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .55);
+  color: #e4e4e4;
+  font-size: 13px;
+  padding: 10px 12px 10px;
+}
+.ks-fallback-card .ks-fb-head { display: flex; align-items: center; gap: 8px; }
+.ks-fallback-card .ks-fb-name {
+  flex: 1;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ks-fallback-card .ks-fb-name:hover { text-decoration: underline; }
+.ks-fallback-card .ks-fb-close {
+  background: none;
+  border: none;
+  color: #8a8f98;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.ks-fallback-card .ks-fb-close:hover { color: #fff; }
+.ks-fallback-card .ks-fb-note { color: #8a8f98; font-size: 11px; margin: 2px 0 8px; }
+
+/* "BETA" under the Kick logo, as the wordmark once had: heavy green capitals,
+   right-aligned beneath it. Drawn as text — no logo artwork is copied or
+   fetched. The logo is found by its Home link and image source, not a utility
+   class, which is what broke the sidebar live badge. */
+body.ks-beta-logo a[href="/"]:has(> img[src*="kick-logo"]) {
+  position: relative;
+}
+body.ks-beta-logo a[href="/"]:has(> img[src*="kick-logo"])::after {
+  content: "BETA";
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 1px;
+  font: 900 9px/1 system-ui, "Segoe UI", Arial, sans-serif;
+  letter-spacing: .04em;
+  color: #53fc18;
+  pointer-events: none;
+}

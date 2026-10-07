@@ -68,6 +68,7 @@
     page_autoDismissGiftDialog: false,
     page_forceViewerCount: false,
     page_liveSaysLame: false,
+    page_betaLogo: false,
     scope: 'all',
     developerMode: false,
   };
@@ -81,15 +82,26 @@
   let _blockedChannels = [];
   let _blockedChatters = [];
   let _recipes = [];
+  let _liked = [];
+  let _disliked = [];
+
+  // Everything kept in chrome.storage.local rather than sync. Read on load,
+  // written on import. Must agree with LOCAL_KEYS in storage.js, which the
+  // popup does not load.
+  const LOCAL_LISTS = ['channelOverrides', 'blockedChannels', 'blockedChatters',
+                       'botRecipes', 'likedChatters', 'ignoredChatters'];
+  const NAME_RE = /^[a-z0-9_]{1,25}$/;
 
   // ── Storage helpers ────────────────────────────────────────────────────────
 
   function loadSettings() {
     return new Promise(resolve => {
       chrome.storage.sync.get(null, (synced) => {
-        chrome.storage.local.get(['channelOverrides', 'blockedChannels', 'blockedChatters', 'botRecipes'], (local) => {
+        chrome.storage.local.get(LOCAL_LISTS, (local) => {
           _blockedChannels = local.blockedChannels || [];
           _blockedChatters = local.blockedChatters || [];
+          _liked = Array.isArray(local.likedChatters) ? local.likedChatters : [];
+          _disliked = Array.isArray(local.ignoredChatters) ? local.ignoredChatters : [];
           // Never saved means the shipped defaults, not an empty list.
           _recipes = Array.isArray(local.botRecipes)
             ? local.botRecipes.map(KS.BotRecipes.normalise).filter(Boolean)
@@ -175,6 +187,7 @@
 
     _renderBlocklist();
     _renderBotlist();
+    _renderPeople();
     _renderRecipes();
     _renderSources();
 
@@ -258,6 +271,61 @@
     if (window.KS && KS.BotList) KS.BotList.submit(name, _settings).catch(() => {});
   }
 
+  // Liked and disliked people. Names came from chat, so textContent only — the
+  // same rule as the marked-bots list. Kept mutually exclusive, as in the
+  // content script.
+  function _savePeople() {
+    chrome.storage.local.set({ likedChatters: _liked, ignoredChatters: _disliked }, _renderPeople);
+  }
+
+  function _renderPersonList(id, list, verb, onRemove) {
+    const box = document.getElementById(id);
+    if (!box) return;
+    box.innerHTML = '';
+    if (!list.length) {
+      const p = document.createElement('p');
+      p.className = 'ks-blocklist-empty';
+      p.textContent = 'Nobody yet.';
+      box.appendChild(p);
+      return;
+    }
+    list.forEach((name) => {
+      const row = document.createElement('div');
+      row.className = 'ks-blocklist-item';
+      const label = document.createElement('span');
+      label.className = 'ks-blocklist-slug';
+      label.textContent = name;
+      const rm = document.createElement('button');
+      rm.className = 'ks-blocklist-remove';
+      rm.textContent = '✕';
+      rm.title = 'Stop ' + verb + ' ' + name;
+      rm.addEventListener('click', () => onRemove(name));
+      row.append(label, rm);
+      box.appendChild(row);
+    });
+  }
+
+  function _renderPeople() {
+    _renderPersonList('liked-container', _liked, 'liking', (n) => {
+      _liked = _liked.filter(x => x !== n); _savePeople();
+    });
+    _renderPersonList('disliked-container', _disliked, 'disliking', (n) => {
+      _disliked = _disliked.filter(x => x !== n); _savePeople();
+    });
+  }
+
+  function _addPerson(like) {
+    const input = document.getElementById('person-add');
+    if (!input) return;
+    const name = String(input.value || '').trim().toLowerCase().replace(/^@/, '');
+    if (!NAME_RE.test(name)) { _showStatus('That is not a Kick username.', 'err'); return; }
+    _liked = _liked.filter(x => x !== name);
+    _disliked = _disliked.filter(x => x !== name);
+    (like ? _liked : _disliked).push(name);
+    input.value = '';
+    _savePeople();
+  }
+
   // ── Bot recipes ────────────────────────────────────────────────────────────
   //
   // Every field is rendered with textContent. A recipe can arrive pasted from a
@@ -286,11 +354,13 @@
   }
 
   function _ruleSummary(rule) {
-    const parts = [rule.account];
+    const parts = [rule.account === '*' ? 'anyone' : rule.account];
     if (rule.start.length) parts.push('starts ' + rule.start.join(' '));
     if (rule.end.length) parts.push('ends ' + rule.end.join(' '));
     if (rule.contains.length) parts.push('contains "' + rule.contains.join('", "') + '"');
-    return parts.join(' · ');
+    let out = parts.join(' · ');
+    if (rule.action === 'highlight') out += ' → highlight';
+    return out;
   }
 
   // A labelled input in the two-column editor grid.
@@ -307,13 +377,22 @@
   function _ruleEditor(r, i) {
     const recipe = _recipes[r];
     const rule = i >= 0 ? recipe.rules[i]
-      : { label: '', account: (recipe.rules[0] && recipe.rules[0].account) || '', start: [], end: [], contains: [], hide: false };
+      : { label: '', account: (recipe.rules[0] && recipe.rules[0].account) || '', start: [], end: [], contains: [], action: 'hide', on: false };
     const grid = _el('div', 'ks-recipe-edit');
     const fLabel = _field(grid, 'Label', rule.label, 'Raids');
-    const fAcct = _field(grid, 'Account', rule.account, 'nedbot');
+    const fAcct = _field(grid, 'Account', rule.account, 'nedbot, or * for anyone');
     const fStart = _field(grid, 'Starts with', rule.start.join(', '), '🚀, 📊');
     const fEnd = _field(grid, 'Ends with', rule.end.join(', '), '🃏');
     const fHas = _field(grid, 'Contains', rule.contains.join(', '), 'some text');
+    grid.appendChild(_el('label', null, 'Then'));
+    const fAction = document.createElement('select');
+    for (const [value, text] of [['hide', 'Hide it'], ['highlight', 'Highlight it']]) {
+      const o = _el('option', null, text);
+      o.value = value;
+      if ((rule.action || 'hide') === value) o.selected = true;
+      fAction.appendChild(o);
+    }
+    grid.appendChild(fAction);
 
     const acts = _el('div', 'ks-recipe-actions');
     const save = _el('button', 'ks-link-btn', 'Save');
@@ -325,11 +404,11 @@
       const check = KS.BotRecipes.normalise({ name: 'x', rules: [{
         label: fLabel.value, account: fAcct.value,
         start: fStart.value, end: fEnd.value, contains: fHas.value,
-        hide: rule.hide,
+        action: fAction.value, on: !!(rule.on || rule.hide),
       }] });
       const clean = check && check.rules[0];
       if (!clean) {
-        err.textContent = 'Needs an account name and at least one thing to match.';
+        err.textContent = 'Needs an account name (or *) and at least one thing to match.';
         return;
       }
       if (i >= 0) recipe.rules[i] = clean;
@@ -430,9 +509,9 @@
         pen.addEventListener('click', () => { _recipeEditing = { r, i }; _renderRecipes(); });
         const cb = document.createElement('input');
         cb.type = 'checkbox';
-        cb.checked = !!rule.hide;
-        cb.title = 'Hide these messages';
-        cb.addEventListener('change', () => { rule.hide = cb.checked; _saveRecipes(); });
+        cb.checked = !!(rule.on || rule.hide);
+        cb.title = 'Use this rule';
+        cb.addEventListener('change', () => { rule.on = cb.checked; delete rule.hide; _saveRecipes(); });
         row.append(text, pen, cb);
         card.appendChild(row);
         if (_recipeEditing && _recipeEditing.r === r && _recipeEditing.i === i) {
@@ -491,8 +570,8 @@
     if (!fresh) return;
     const at = _recipes.findIndex(x => x.name === 'NedBot');
     if (at >= 0) {
-      const had = new Map(_recipes[at].rules.map(rule => [rule.label, rule.hide]));
-      fresh.rules.forEach(rule => { if (had.has(rule.label)) rule.hide = had.get(rule.label); });
+      const had = new Map(_recipes[at].rules.map(rule => [rule.label, !!(rule.on || rule.hide)]));
+      fresh.rules.forEach(rule => { if (had.has(rule.label)) rule.on = had.get(rule.label); });
       fresh.channels = _recipes[at].channels;
       _recipes[at] = fresh;
     } else {
@@ -505,6 +584,8 @@
 
   function _wireRecipes() {
     const on = (id, fn) => { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
+    on('person-like-btn', () => _addPerson(true));
+    on('person-dislike-btn', () => _addPerson(false));
     on('recipe-import', _importRecipe);
     on('recipe-restore', _restoreNedBot);
     on('recipe-new', () => {
@@ -724,7 +805,11 @@
       reader.onload = ev => {
         try {
           const imported = JSON.parse(ev.target.result);
-          const validKeys = Object.keys(DEFAULT).concat(['channelOverrides']);
+          if (!imported || typeof imported !== 'object') throw new Error('That file is not a settings export.');
+          // The lists kept in local storage — people, channels, recipes — were
+          // exported but dropped here, so the things most worth carrying to
+          // another browser were the ones that did not survive the trip.
+          const validKeys = Object.keys(DEFAULT).concat(LOCAL_LISTS);
           const filtered = {};
           for (const k of validKeys) {
             if (k in imported) filtered[k] = imported[k];
@@ -733,7 +818,33 @@
           const syncKeys = {};
           const localKeys = {};
           for (const [k, v] of Object.entries(filtered)) {
-            if (k === 'channelOverrides') localKeys[k] = v; else syncKeys[k] = v;
+            if (LOCAL_LISTS.includes(k)) localKeys[k] = v; else syncKeys[k] = v;
+          }
+          // An export is a file anyone can hand you, so the lists are checked
+          // like any other untrusted input rather than written as found.
+          const names = (v) => (Array.isArray(v) ? v : [])
+            .map(n => String(n || '').trim().toLowerCase().replace(/^@/, ''))
+            .filter((n, i, a) => NAME_RE.test(n) && a.indexOf(n) === i);
+          for (const k of ['blockedChatters', 'likedChatters', 'ignoredChatters']) {
+            if (k in localKeys) localKeys[k] = names(localKeys[k]);
+          }
+          if ('blockedChannels' in localKeys) {
+            localKeys.blockedChannels = (Array.isArray(localKeys.blockedChannels) ? localKeys.blockedChannels : [])
+              .map(c => String(c || '').trim().toLowerCase())
+              .filter((c, i, a) => /^[a-z0-9_-]{1,30}$/.test(c) && a.indexOf(c) === i);
+          }
+          if ('botRecipes' in localKeys) {
+            localKeys.botRecipes = (Array.isArray(localKeys.botRecipes) ? localKeys.botRecipes : [])
+              .map(KS.BotRecipes.normalise).filter(Boolean);
+          }
+          if ('channelOverrides' in localKeys
+              && (typeof localKeys.channelOverrides !== 'object' || Array.isArray(localKeys.channelOverrides))) {
+            delete localKeys.channelOverrides;
+          }
+          // Someone on both lists has no meaning; the dislike wins, as the
+          // safer reading of a contradictory file.
+          if (localKeys.likedChatters && localKeys.ignoredChatters) {
+            localKeys.likedChatters = localKeys.likedChatters.filter(n => !localKeys.ignoredChatters.includes(n));
           }
           chrome.storage.sync.set(syncKeys, () => {
             chrome.storage.local.set(localKeys, () => {
@@ -829,7 +940,10 @@
     'top-gifters': 'Top gifters', 'gift-animations': 'Gift animations',
     'pinned': 'Pinned messages', 'polls': 'Polls & predictions', 'goals': 'Goals',
     'autoplay': 'Autoplay overlays', 'ban-notice': 'Ban notice',
-    'bot-category': 'NedBot categories', 'kicks-pill': 'Kicks pills',
+    'bot-category': 'Recipes', 'kicks-pill': 'Kicks pills',
+    'too-short': 'Short messages', 'bot-game': 'Chat games', 'burst-spam': 'Coordinated spam',
+    'level-up': 'Level-ups', 'marked-bot': 'Marked bots', 'redemption': 'Redemptions',
+    'mizkif': 'Mizkif mode',
   };
 
   function _statsGroup(title, counts) {

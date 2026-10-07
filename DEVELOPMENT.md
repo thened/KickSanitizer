@@ -264,14 +264,15 @@ nothing — they simply may not have spoken. If rows do survive with
 endpoint behind the Muted Users panel so the mirror can filter by username
 directly rather than depending on Kick's CSS staying the same.
 
-## Bot recipes — the shared format
+## Recipes — the shared format
 
-`utils/botRecipes.js`. A recipe hides some of a bot's messages by category
-rather than blocking the bot. Recipes are user data in `chrome.storage.local`
-under `botRecipes`; NedBot's ships as the default. Users share them as text, so
-**this format is a public contract** — changing it breaks recipes people have
-already posted. Add fields; do not rename or repurpose them. A breaking change
-needs `kickSanitizerRecipe: 2` and a reader for 1.
+`utils/botRecipes.js`. A recipe hides or highlights messages by category — some
+of a bot's jobs rather than the whole bot, or a word from anyone. Recipes are
+user data in `chrome.storage.local` under `botRecipes`; NedBot's ships as the
+default. Users share them as text, so **this format is a public contract** —
+changing it breaks recipes people have already posted. Add fields; do not
+rename or repurpose them. A breaking change needs `kickSanitizerRecipe: 2` and
+a reader for 1.
 
 ```json
 {
@@ -279,18 +280,25 @@ needs `kickSanitizerRecipe: 2` and a reader for 1.
   "name": "NedBot",
   "channels": ["nedx"],
   "rules": [
-    { "label": "Raids", "account": "nedbot", "start": ["🚀"], "hide": true },
+    { "label": "Raids", "account": "nedbot", "start": ["🚀"], "on": true },
     { "label": "Pokémon cards", "account": "nedbot", "start": ["🃏"], "end": ["🃏", "📿"] },
-    { "label": "Lookups", "account": "nedbot", "contains": ["direct ·"] }
+    { "label": "Race results", "account": "nedbot", "contains": ["wins the race"], "action": "highlight", "on": true },
+    { "label": "Spoilers", "account": "*", "contains": ["ending spoiler"], "on": true }
   ]
 }
 ```
 
 - `channels` empty or absent = every channel.
+- `account` is one Kick username, or `*` for anyone. To highlight everything a
+  person says, Like them instead — a rule needs something to match, by design.
+- `action` is `hide` (the default when absent) or `highlight`. Hide and
+  highlight rules are evaluated separately; a message matching both is hidden.
 - A rule matches if ANY of `start` / `end` / `contains` matches; `contains` is
   case-insensitive. U+FE0F is ignored on both sides, so 🗳 and 🗳️ are one marker.
-- `hide` must be literally `true`. A shared recipe's switches are the sharer's
-  suggestion; the importer can change them.
+- `on` must be literally `true`. **Readers also accept `hide: true`** — the
+  switch's name while hiding was the only action, and it shipped in b321612.
+  Writers emit `on`. A shared recipe's switches are the sharer's suggestion;
+  the importer can change them.
 - Everything pasted goes through `KS.BotRecipes.parse`: size and count limits,
   account/channel patterns, empty markers dropped (an empty marker would match
   every message). The popup renders every field with `textContent`.
@@ -301,6 +309,35 @@ The NedBot defaults come from measuring its output, not from its source: 400
 messages, 2026-10-06/07. `end` markers are used only where the data shows they
 are exclusive — 🃏/📿 end only Pokémon messages, while the racing promos end in
 👑 🏆 🎰 as decoration.
+
+## Liked and disliked people
+
+`likedChatters` (highlighted, never filtered — the pass a mention gets) and
+`ignoredChatters` (every message hidden), both LOCAL. Set from 👍/👎 on Kick's
+user card (`filters/personCard.js`), from the filtered-messages panel, or typed
+into the popup.
+
+- On the card, not on rows. Buttons on every message were tried first and
+  covered the end of the text; the card is where Kick puts per-person actions.
+  The card is `#user-identity`; the person is read from its profile link
+  (`<a title="name" href="https://kick.com/name">`), the one stable identity on
+  it. Other tools inject there too — a nedbot overlay sits above Kick's part as
+  `#nb-card` — so ours goes inside Kick's part and touches nothing else.
+
+- Kick's own mute lives in this browser's localStorage only. These lists are
+  the portable version: they go through settings export and import.
+- Deliberately NOT the marked-bots list. A marked bot can be reported to a
+  shared list; a disliked person's name must never leave the browser.
+- A dislike outranks a mention — like Kick's mute, you asked not to see them.
+- The lists are mutually exclusive. `_setPerson` writes into the in-memory
+  settings at once rather than waiting for storage to echo back, so the row
+  update, the next message, and a quick second click all see the new state.
+
+Settings import used to accept only sync keys plus `channelOverrides`, so marked
+bots, recipes and these lists were exported but silently dropped on import.
+Import now takes every LOCAL list and validates each — names against the
+username pattern, recipes through the recipe normaliser — because an export is
+a file anyone can hand you.
 
 ## Bot list sources — what a server has to serve
 

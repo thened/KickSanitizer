@@ -61,7 +61,11 @@ KS.DEFAULT_SETTINGS = {
   chat_kicksPills: 'show',
   // Bot recipes — see utils/botRecipes.js. Stored LOCAL (below): a list people
   // add to can outgrow sync storage's per-item quota.
-  botRecipes: (KS.BotRecipes ? KS.BotRecipes.defaults() : []),            // pills above chat: 'show' | 'dismiss' (after ~8s) | 'hide'
+  botRecipes: (KS.BotRecipes ? KS.BotRecipes.defaults() : []),
+  // Liked people (never filtered, highlighted) and disliked people (hidden).
+  // LOCAL; carried between browsers by settings export and import.
+  likedChatters: [],
+  ignoredChatters: [],            // pills above chat: 'show' | 'dismiss' (after ~8s) | 'hide'
   chat_keepDeletedMessages: false,    // re-show messages removed by bans/mod deletions
   chat_showTimestamps: false,         // force Kick's built-in timestamp spans to always show
   // Kick disables the chat input for a cooldown in slow mode; focus falls to
@@ -115,6 +119,7 @@ KS.DEFAULT_SETTINGS = {
   // one per live channel every 10 minutes.
   page_forceViewerCount: false,
   page_liveSaysLame: false,            // sidebar "LIVE" badge reads "LAME"
+  page_betaLogo: false,                // "BETA" under the Kick logo, as it once had
   page_hideSidebar: false,
   page_hideBanNotice: false,     // hides "you are banned" box and unban-request button
 
@@ -129,7 +134,7 @@ KS.DEFAULT_SETTINGS = {
 // blockedChatters and the cached remote list are LOCAL, not synced: both can
 // grow long, and sync storage has a small per-item quota.
 const LOCAL_KEYS = ['channelOverrides', 'blockedChannels', 'blockedChatters',
-                    'remoteBots', 'remoteBotsAt', 'botRecipes'];
+                    'remoteBots', 'remoteBotsAt', 'botRecipes', 'likedChatters', 'ignoredChatters'];
 
 KS.getSettings = function () {
   return new Promise((resolve) => {
