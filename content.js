@@ -719,6 +719,18 @@
         topFrame: window.top === window.self,
         enabled: !!(_settings && _settings.enabled),
         cleanChat: !!(_settings && _settings.chat_mirrorMode),
+        // Which recipe rules are switched on, as 'account: label'. Without it
+        // "the recipe isn't hiding anything" cannot be told apart from "no rule
+        // is on" — the popup is the only other place this state is visible.
+        recipesOn: (() => {
+          const list = (_settings && Array.isArray(_settings.botRecipes)) ? _settings.botRecipes : null;
+          if (!list) return null;
+          const on = [];
+          for (const r of list) for (const rule of (r && r.rules) || []) {
+            if (rule && rule.hide) on.push(rule.account + ': ' + rule.label);
+          }
+          return on;
+        })(),
         socketUp: !!(KS.ChatSocket && KS.ChatSocket.isConnected && KS.ChatSocket.isConnected()),
         socketMsgs: sock ? sock.seen : null,
         filtered: sock ? sock.filtered : null,
@@ -743,6 +755,28 @@
             bar: box(b),
             kick: box(k),
             kickOpacity: k ? getComputedStyle(k).opacity : null,
+          };
+        })(),
+        // How many elements each Kick-dependent selector finds right now.
+        //
+        // A renamed class does not throw — the feature just matches nothing
+        // and looks switched on. That happened twice in one day (the sidebar
+        // live badge, twice over), and nothing else here could tell "matched
+        // nothing" from "had nothing to do". On a live channel page every
+        // count except kicksPills should be above zero; a 0 means Kick changed
+        // that part of the page.
+        health: (() => {
+          const n = (list) => { try { return KS.Sel.findAll(list).length; } catch (_) { return -1; } };
+          const row = KS.Sel.find(KS.Sel.chatMessage);
+          return {
+            chatPanel: document.querySelectorAll('#channel-chatroom').length,
+            chatList: n(KS.Sel.chatContainer),
+            chatRows: n(KS.Sel.chatMessage),
+            rowContent: row ? !!KS.Sel.find(KS.Sel.messageContent, row) : null,
+            rowUsername: row ? !!KS.Sel.find(KS.Sel.messageUsername, row) : null,
+            timestamps: document.querySelectorAll('[style*="var(--chatroom-timestamps-display"]').length,
+            sidebarLive: n(KS.Sel.sidebarLiveBadge),
+            kicksPills: n(KS.Sel.kicksPill),
           };
         })(),
         barUp: !!document.querySelector('.ks-mirror-header'),

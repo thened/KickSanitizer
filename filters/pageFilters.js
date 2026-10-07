@@ -174,16 +174,20 @@ KS.PageFilters = (function () {
     return arr.filter((el, i, a) => el && a.indexOf(el) === i);
   }
 
+  // Shared by LAME and the viewer counts. See KS.Sel.sidebarLiveBadge for why
+  // it is structural.
+  function _sidebarLiveSpans() {
+    return KS.Sel.findAll(KS.Sel.sidebarLiveBadge);
+  }
+
   // Mark the sidebar badges that actually say "LIVE". The same span shows a
   // viewer count on some entries, so this cannot be a CSS-only match — that
-  // would paint "LAME" over the number. Identified as the span beside the green
-  // dot, which is what the badge is, rather than by a Tailwind class.
+  // would paint "LAME" over the number.
   //
   // Re-run on every scan: React replaces these nodes when a channel goes live
   // or offline, which drops the attribute and can also swap LIVE for a count.
   function _markLiveBadges(on) {
-    const spans = document.querySelectorAll(
-      '[data-testid^="sidebar-"] .bg-green-500 + span');
+    const spans = _sidebarLiveSpans();
     for (const span of spans) {
       // A badge already showing a real viewer count keeps it — replacing a
       // number with the word LAME would destroy information, and both features
@@ -203,12 +207,26 @@ KS.PageFilters = (function () {
   // small contribution sitting above the chat.
   //
   // Re-run on every scan: pills appear and expire on their own countdown.
+  //
+  // chat_kicksPills on top of the threshold: 'show' leaves them to Kick,
+  // 'hide' removes every one, 'dismiss' lets each stay long enough to read and
+  // then removes it — Kick keeps large ones up for minutes.
+  const PILL_READ_MS = 8000;
+  const _pillSeen = new Map();   // sender avatar + amount -> first seen
+  let _pillTimer = null;
+
   function _applyKicksPills() {
     const min = Number(_settings && _settings.chat_kicksMinAmount) || 0;
+    const mode = (_settings && _settings.chat_kicksPills) || 'show';
     const pills = KS.Sel.findAll(KS.Sel.kicksPill);
+    const now = Date.now();
+    const present = new Set();
+    let nextDue = Infinity;
 
     for (const pill of pills) {
-      if (!_settings || !_settings.enabled || min <= 0) {
+      // Never a chat row, in Kick's list or ours.
+      if (pill.closest('#chatroom-messages, #ks-mirror')) continue;
+      if (!_settings || !_settings.enabled) {
         if (pill.dataset.ksHidden === 'kicks-pill') delete pill.dataset.ksHidden;
         continue;
       }
@@ -216,13 +234,37 @@ KS.PageFilters = (function () {
       const raw = span && span.getAttribute('title');
       const amount = /^\d+$/.test(String(raw || '')) ? parseInt(raw, 10) : NaN;
 
-      // An unreadable amount is left alone. Hiding something we could not price
-      // would be worse than showing a small one.
-      if (!Number.isFinite(amount)) continue;
+      // Keyed on what the pill SAYS rather than the element: if React remounts
+      // the button, a node-keyed timer would restart and the pill could outlive
+      // its read time indefinitely.
+      const img = pill.querySelector('img');
+      const key = (img ? img.getAttribute('src') : '') + '|' + raw;
+      present.add(key);
+      if (!_pillSeen.has(key)) _pillSeen.set(key, now);
 
-      if (amount < min) _hideEl(pill, 'kicks-pill');
+      let hide = false;
+      if (mode === 'hide') hide = true;
+      else if (mode === 'dismiss') {
+        const due = _pillSeen.get(key) + PILL_READ_MS;
+        if (now >= due) hide = true;
+        else nextDue = Math.min(nextDue, due);
+      }
+      // An unreadable amount is left to the mode alone. Hiding something we
+      // could not price would be worse than showing a small one.
+      if (!hide && min > 0 && Number.isFinite(amount) && amount < min) hide = true;
+
+      if (hide) _hideEl(pill, 'kicks-pill');
       else if (pill.dataset.ksHidden === 'kicks-pill') delete pill.dataset.ksHidden;
     }
+
+    // Forget pills Kick has removed, so the same person sending the same
+    // amount again later gets a fresh read time.
+    for (const key of _pillSeen.keys()) if (!present.has(key)) _pillSeen.delete(key);
+
+    // Scans follow DOM changes, and a quiet page might not produce one when a
+    // pill comes due. Schedule the next check rather than rely on that.
+    clearTimeout(_pillTimer);
+    if (nextDue !== Infinity) _pillTimer = setTimeout(_applyKicksPills, nextDue - now + 50);
   }
 
   // ── Forced viewer counts in the sidebar ───────────────────────────────────
@@ -250,9 +292,12 @@ KS.PageFilters = (function () {
   const _viewerDiag = { tried: 0, ok: 0, failed: 0, keys: null };
   let _viewersTimer = null;
   let _viewersBusy = false;
+  // Set when a refresh ran before the sidebar had rendered. Without it the
+  // first lookup found no channels and the next was ten minutes away.
+  let _viewersRetry = false;
 
   function _liveBadges() {
-    return document.querySelectorAll('[data-testid^="sidebar-"] .bg-green-500 + span');
+    return _sidebarLiveSpans();
   }
 
   function _slugFor(badge) {
@@ -268,10 +313,9 @@ KS.PageFilters = (function () {
     return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
   }
 
-  // The field name is NOT confirmed against a live response, so several shapes
-  // are tried and anything unrecognised yields null. Failing open leaves the
-  // badge reading LIVE, which is merely the current behaviour; guessing wrong
-  // and rendering a number would be worse than showing nothing.
+  // Confirmed live: /api/v2/channels/{slug} returns livestream.viewer_count.
+  // The other shapes are kept as fallbacks; anything unrecognised yields null,
+  // which leaves the badge reading LIVE rather than rendering a wrong number.
   function _extractViewers(data) {
     const ls = data && (data.livestream || data.livestream_data || data);
     if (!ls || typeof ls !== 'object') return null;
@@ -280,7 +324,12 @@ KS.PageFilters = (function () {
     return Number.isFinite(n) ? n : null;
   }
 
-  async function _refreshViewerCounts() {
+  // `onlyNew` fetches just the channels never looked up — ones that appeared
+  // after the last pass, from "Show More" or a list that rendered late. Without
+  // it they read LIVE until the next ten-minute refresh.
+  const _viewerAsked = new Set();
+
+  async function _refreshViewerCounts(onlyNew) {
     if (_viewersBusy) return;
     if (!_settings || !_settings.enabled || !_settings.page_forceViewerCount) return;
 
@@ -298,10 +347,14 @@ KS.PageFilters = (function () {
     const slugs = [];
     for (const badge of _liveBadges()) {
       const slug = _slugFor(badge);
-      if (slug && !slugs.includes(slug)) slugs.push(slug);
+      if (slug && !slugs.includes(slug) && !(onlyNew === true && _viewerAsked.has(slug))) {
+        slugs.push(slug);
+      }
     }
-    if (!slugs.length) return;
+    if (!slugs.length) { if (onlyNew !== true) _viewersRetry = true; return; }
+    slugs.forEach(sl => _viewerAsked.add(sl));
 
+    _viewersRetry = false;
     _viewersBusy = true;
     try {
       for (const slug of slugs) {
@@ -338,6 +391,15 @@ KS.PageFilters = (function () {
   // attribute with them. Reads only from cache, so it costs nothing.
   function _applyViewerCounts() {
     const on = !!(_settings && _settings.enabled && _settings.page_forceViewerCount);
+    // Scans follow DOM changes, so the first one after the sidebar renders is
+    // the moment to retry a lookup that found nothing.
+    if (on && _viewersRetry && !_viewersBusy && _liveBadges().length) {
+      _viewersRetry = false;
+      _refreshViewerCounts();
+    } else if (on && !_viewersBusy && _viewersTimer
+               && [..._liveBadges()].some(b => { const sl = _slugFor(b); return sl && !_viewerAsked.has(sl); })) {
+      _refreshViewerCounts(true);
+    }
     for (const badge of _liveBadges()) {
       if (!on) { delete badge.dataset.ksViewers; continue; }
       const slug = _slugFor(badge);

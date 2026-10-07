@@ -58,6 +58,10 @@ KS.DEFAULT_SETTINGS = {
   // Channel-point redemptions ("X has redeemed Y").
   chat_hideRedemptions: false,
   chat_kicksMinAmount: 0,             // 0 = show all; N = hide Kicks notices where amount < N
+  chat_kicksPills: 'show',
+  // Bot recipes — see utils/botRecipes.js. Stored LOCAL (below): a list people
+  // add to can outgrow sync storage's per-item quota.
+  botRecipes: (KS.BotRecipes ? KS.BotRecipes.defaults() : []),            // pills above chat: 'show' | 'dismiss' (after ~8s) | 'hide'
   chat_keepDeletedMessages: false,    // re-show messages removed by bans/mod deletions
   chat_showTimestamps: false,         // force Kick's built-in timestamp spans to always show
   // Kick disables the chat input for a cooldown in slow mode; focus falls to
@@ -125,7 +129,7 @@ KS.DEFAULT_SETTINGS = {
 // blockedChatters and the cached remote list are LOCAL, not synced: both can
 // grow long, and sync storage has a small per-item quota.
 const LOCAL_KEYS = ['channelOverrides', 'blockedChannels', 'blockedChatters',
-                    'remoteBots', 'remoteBotsAt'];
+                    'remoteBots', 'remoteBotsAt', 'botRecipes'];
 
 KS.getSettings = function () {
   return new Promise((resolve) => {
@@ -210,6 +214,14 @@ KS.importSettings = function (jsonString) {
   const filtered = {};
   for (const k of validKeys) {
     if (k in imported) filtered[k] = imported[k];
+  }
+  // Recipes are the one structured value here that the filter walks, so they
+  // go through the same validation as a pasted recipe rather than in raw.
+  if ('botRecipes' in filtered) {
+    filtered.botRecipes = (Array.isArray(filtered.botRecipes) && KS.BotRecipes)
+      ? filtered.botRecipes.map(KS.BotRecipes.normalise).filter(Boolean)
+      : undefined;
+    if (!filtered.botRecipes) delete filtered.botRecipes;
   }
 
   if (!Object.keys(filtered).length) {

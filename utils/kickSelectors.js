@@ -311,8 +311,24 @@ KS.Sel = {
   //
   // The amount lives in title=, not the text. The text abbreviates to "1.2K"
   // once it is large enough; the attribute stays exact.
+  //
+  // Scoped to #channel-chatroom. Unscoped, this matched every channel in the
+  // left sidebar too — an avatar plus a viewer count in title= is the same
+  // shape — so a threshold of 600 hid each followed channel under 600 viewers.
+  // Confirmed live: all 15 matches on a page with no pills were sidebar
+  // entries. If Kick moves the strip out of the chat panel, this fails to
+  // match, which hides nothing rather than the wrong thing.
   kicksPill: [
-    'button:has(img[src*="profile_image"]):has(span[title])',
+    '#channel-chatroom button:has(img[src*="profile_image"]):has(span[title])',
+  ],
+
+  // The live badge on a sidebar channel: the span right after the live dot.
+  // Matched by STRUCTURE — the dot is an empty div — because this was
+  // `.bg-green-500 + span` until Kick renamed the class to
+  // bg-kick-voltGreen-150, and LAME and the viewer counts both silently matched
+  // nothing. Offline entries have no dot, so they never match.
+  sidebarLiveBadge: [
+    'a[data-testid^="sidebar-"][data-testid*="-channel-"] div:empty + span',
   ],
 
   notificationsRegion: [

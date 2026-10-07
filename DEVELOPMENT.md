@@ -45,6 +45,31 @@ it *shadows every selector below it*. Three separate bugs today were this shape:
 None of these failed loudly. Before trusting any selector, count matches on a
 live page. Never join the list with commas; iterate it in order.
 
+Three more, found 2026-10-07 by watching a live page rather than reading code:
+
+- **A Tailwind class renamed under us.** The sidebar live badge was
+  `.bg-green-500 + span`; Kick renamed the dot to `bg-kick-voltGreen-150`. LAME
+  and the forced viewer counts both matched nothing — switched on, doing
+  nothing, no error. Now `KS.Sel.sidebarLiveBadge`, matched by structure (the
+  dot is an empty `div`). Prefer structure and `data-testid` to colour classes.
+- **A selector matching the definer as well as the user of a CSS variable.**
+  `[style*="chatroom-timestamps-display"]` was meant for the timestamp spans
+  (`display: var(--chatroom-timestamps-display)`) but also matched `<html>` and
+  `#ks-mirror`, which *define* the variable. The forced `display: inline` turned
+  the mirror from a flex column into a block: rows stacked from the top instead
+  of the bottom, and every theme's `gap` silently stopped applying. Match
+  `var(--…` to get only consumers.
+- **A shape that is not unique to what you mean.** `kicksPill` (an avatar plus
+  a `span[title]` holding a number) also describes every sidebar channel entry —
+  avatar, viewer count in `title`. With a threshold set it hid followed channels.
+  Now scoped to `#channel-chatroom`, so a future layout change fails to match
+  rather than hiding the wrong thing.
+
+`ksDebug.health` counts what each Kick-dependent selector finds. On a live
+channel page every value except `kicksPills` should be above zero; a `0` is the
+first sign Kick changed something. Read it before debugging a feature that
+"does nothing".
+
 ## Kick DOM facts
 
 **Chat is virtualised.** Every row is
@@ -238,6 +263,44 @@ nothing — they simply may not have spoken. If rows do survive with
 `display: none`, the guard is load-bearing and it becomes worth finding the
 endpoint behind the Muted Users panel so the mirror can filter by username
 directly rather than depending on Kick's CSS staying the same.
+
+## Bot recipes — the shared format
+
+`utils/botRecipes.js`. A recipe hides some of a bot's messages by category
+rather than blocking the bot. Recipes are user data in `chrome.storage.local`
+under `botRecipes`; NedBot's ships as the default. Users share them as text, so
+**this format is a public contract** — changing it breaks recipes people have
+already posted. Add fields; do not rename or repurpose them. A breaking change
+needs `kickSanitizerRecipe: 2` and a reader for 1.
+
+```json
+{
+  "kickSanitizerRecipe": 1,
+  "name": "NedBot",
+  "channels": ["nedx"],
+  "rules": [
+    { "label": "Raids", "account": "nedbot", "start": ["🚀"], "hide": true },
+    { "label": "Pokémon cards", "account": "nedbot", "start": ["🃏"], "end": ["🃏", "📿"] },
+    { "label": "Lookups", "account": "nedbot", "contains": ["direct ·"] }
+  ]
+}
+```
+
+- `channels` empty or absent = every channel.
+- A rule matches if ANY of `start` / `end` / `contains` matches; `contains` is
+  case-insensitive. U+FE0F is ignored on both sides, so 🗳 and 🗳️ are one marker.
+- `hide` must be literally `true`. A shared recipe's switches are the sharer's
+  suggestion; the importer can change them.
+- Everything pasted goes through `KS.BotRecipes.parse`: size and count limits,
+  account/channel patterns, empty markers dropped (an empty marker would match
+  every message). The popup renders every field with `textContent`.
+- Settings import runs `botRecipes` through the same normaliser — it is the one
+  structured value the filter walks on every message.
+
+The NedBot defaults come from measuring its output, not from its source: 400
+messages, 2026-10-06/07. `end` markers are used only where the data shows they
+are exclusive — 🃏/📿 end only Pokémon messages, while the racing promos end in
+👑 🏆 🎰 as decoration.
 
 ## Bot list sources — what a server has to serve
 

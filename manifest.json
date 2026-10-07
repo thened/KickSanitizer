@@ -38,6 +38,7 @@
       "js": [
         "utils/kickSelectors.js",
         "utils/messageNormalization.js",
+        "utils/botRecipes.js",
         "storage.js",
         "stats.js",
         "filters/chatters.js",

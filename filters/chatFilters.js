@@ -228,6 +228,11 @@ KS.ChatFilters = (function () {
     const text = getMessageText(msgEl);
     const username = getUsername(msgEl);
 
+    // Bot recipes: some of a bot's jobs rather than the whole bot.
+    if (_isRecipeHidden(username, _tagText(msgEl), s)) {
+      return _hide(msgEl, 'bot-category');
+    }
+
     // Emote-only
     if (s.chat_hideEmoteOnly && isEmoteOnly(msgEl)) {
       return _hide(msgEl, 'emote-only');
@@ -418,6 +423,33 @@ KS.ChatFilters = (function () {
     if (contentEl) return contentEl.textContent.trim();
     // Fallback: full text minus username if detectable
     return msgEl.textContent.trim();
+  }
+
+  // ── Bot recipes ─────────────────────────────────────────────────────────────
+  //
+  // Hiding some of a bot's messages by category. The rules are user data — see
+  // utils/botRecipes.js — so this file only supplies the text to match.
+
+  function _isRecipeHidden(username, text, s) {
+    return !!(KS.BotRecipes && s
+      && KS.BotRecipes.isHidden(username, text, s.botRecipes, KS.Sel.getCurrentChannel()));
+  }
+
+  // The message as text, reading an image's alt where text would be. Emoji may
+  // be drawn as images, and textContent skips those entirely — a category
+  // marker would be invisible to a plain text read.
+  function _tagText(msgEl) {
+    const contentEl = KS.Sel.find(KS.Sel.messageContent, msgEl) || msgEl;
+    let out = '';
+    const walk = (node) => {
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) out += child.textContent;
+        else if (child.tagName === 'IMG') out += child.getAttribute('alt') || '';
+        else if (child.nodeType === Node.ELEMENT_NODE) walk(child);
+      }
+    };
+    walk(contentEl);
+    return out;
   }
 
   function isEmoteOnly(msgEl) {
@@ -725,6 +757,7 @@ KS.ChatFilters = (function () {
     // must match the DOM path or the count would disagree with the screen.
     if (s.chat_neverFilterMentions !== false && _mentionsMe(raw)) return false;
 
+    if (_isRecipeHidden(user, raw, s)) return true;
     if (s.chat_hideEmoteOnly && ((emotes > 0 && !text) || KS.Normalize.isEmojiOnly(text))) return true;
     if (s.chat_maxEmotes > 0 && emotes > s.chat_maxEmotes) return true;
     if (s.chat_hideBotCommands && KS.Normalize.isBotCommand(text)) return true;

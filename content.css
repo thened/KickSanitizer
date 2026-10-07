@@ -42,6 +42,16 @@ body.ks-mirror-on [data-testid="chatroom-messages"] {
   gap: var(--chatroom-message-spacing, 2px);
   font-size: var(--chatroom-font-size, 13px);
 }
+/* Anchor rows to the bottom, by the message box, like Kick's own chat. Until
+   the list fills the column the rows otherwise stack from the top, and each new
+   message lands a little lower than the last.
+   A pseudo-element rather than margin on :first-child: it is always the first
+   flex item, so a hidden row at the top cannot swallow the margin. Once rows
+   overflow, the auto margin resolves to 0 and scrolling is unaffected. */
+#ks-mirror::before {
+  content: "";
+  margin-top: auto;
+}
 
 /* Switch back to Kick's chat. Sits outside the scrolling list so it neither
    scrolls away nor gets swept up by the row pruner. */
@@ -428,8 +438,14 @@ body.ks-claiming [role="dialog"] {
 /* ── Timestamps (forced visible) ────────────────────────────────────────────── */
 /* Kick hides timestamps via --chatroom-timestamps-display: none.
    Adding .ks-timestamps to body overrides the variable with !important,
-   which beats inline styles in Chrome. */
-body.ks-timestamps [style*="chatroom-timestamps-display"] {
+   which beats inline styles in Chrome.
+
+   Matches elements that USE the variable — `var(--chatroom-…` — not ones that
+   DEFINE it. The looser `chatroom-timestamps-display` also caught <html> and
+   #ks-mirror, both of which carry the definition, and forced the mirror from
+   its flex column to a block. That silently disabled the bottom anchoring and
+   every theme's `gap`. */
+body.ks-timestamps [style*="var(--chatroom-timestamps-display"] {
   display: inline !important;
 }
 

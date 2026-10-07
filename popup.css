@@ -355,6 +355,71 @@ input[type="radio"] {
 }
 .ks-blocklist-remove:hover { color: #ff6b6b; }
 
+/* ── Bot recipes ────────────────────────────────────────────────────────── */
+.ks-recipe {
+  background: var(--surface2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 4px 0 6px;
+}
+.ks-recipe-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.ks-recipe-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ks-recipe-where { font-size: 10px; color: var(--text-muted); }
+.ks-recipe-rule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border-top: 1px solid var(--border);
+}
+.ks-recipe-rule:first-of-type { border-top: none; }
+.ks-recipe-rule-text { flex: 1; min-width: 0; font-size: 11.5px; }
+.ks-recipe-rule-text .ks-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ks-recipe-icon {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+}
+.ks-recipe-icon:hover { color: var(--text); }
+.ks-recipe-edit {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 4px 6px;
+  align-items: center;
+  padding: 6px 0 4px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.ks-recipe-edit input,
+.ks-recipe-share textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 11.5px;
+  padding: 3px 5px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+.ks-recipe-edit input:focus,
+.ks-recipe-share textarea:focus { border-color: var(--green-border); }
+.ks-recipe-edit .ks-recipe-actions { grid-column: 1 / -1; }
+.ks-recipe-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.ks-recipe-share { margin: 6px 0; font-size: 11.5px; }
+.ks-recipe-share summary { cursor: pointer; color: var(--text-muted); }
+.ks-recipe-share textarea { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; resize: vertical; margin-top: 4px; }
+.ks-recipe-err { color: #ff6b6b !important; }
+
 /* ── Disclaimer ────────────────────────────────────────────────────────── */
 .ks-disclaimer {
   font-size: 10px;

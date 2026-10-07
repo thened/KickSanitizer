@@ -310,6 +310,17 @@
     </label>
     <input type="number" id="chat-kicks-min" data-key="chat_kicksMinAmount" min="0" max="9999" step="1" style="width:52px">
   </div>
+  <div class="ks-row">
+    <label for="chat-kicks-pills">
+      Kicks pills above chat
+      <span class="ks-hint">The gifted-Kicks strip at the top of chat</span>
+    </label>
+    <select id="chat-kicks-pills" data-key="chat_kicksPills">
+      <option value="show">Show</option>
+      <option value="dismiss">Hide after reading</option>
+      <option value="hide">Hide all</option>
+    </select>
+  </div>
 
 </div>
 
@@ -449,6 +460,23 @@
   </div>
   <div id="botlist-container"></div>
 
+  <div class="ks-section-title">Bot recipes</div>
+  <p class="ks-hint" style="margin-bottom:6px">Hide some of a bot's jobs without blocking it. Switch on what to hide; ✎ changes what a rule matches. Messages that mention you always show.</p>
+  <div id="recipes-container"></div>
+  <div class="ks-recipe-actions">
+    <button class="ks-link-btn" id="recipe-new">New recipe</button>
+    <button class="ks-link-btn" id="recipe-restore">Restore NedBot recipe</button>
+  </div>
+  <details id="recipe-share-box" class="ks-recipe-share">
+    <summary>Share or add a recipe</summary>
+    <p class="ks-hint">Share puts a recipe here as text to send to someone. To add one, paste it here — you can read exactly what it hides first.</p>
+    <textarea id="recipe-text" rows="5" spellcheck="false" placeholder='{"kickSanitizerRecipe":1, ...}'></textarea>
+    <div class="ks-recipe-actions">
+      <button class="ks-link-btn" id="recipe-import">Add pasted recipe</button>
+      <span id="recipe-msg" class="ks-hint"></span>
+    </div>
+  </details>
+
   <div class="ks-section-title">Shared lists</div>
   <p class="ks-hint" style="margin-bottom:6px">Servers to pull known bots from, and optionally report to. Adding one asks your permission to reach that host — nothing is contacted until you allow it, and you can revoke it in Chrome at any time.</p>
   <div class="ks-row">
@@ -537,6 +565,7 @@
 <!-- botlist.js first: popup.js calls KS.BotList when reporting is on, and
      the popup is a separate page from the content scripts. -->
 <script src="filters/botlist.js"></script>
+<script src="utils/botRecipes.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

@@ -37,6 +37,7 @@
     chat_hideModBadges: false,
     chat_hideOtherBadges: false,
     chat_kicksMinAmount: 0,
+    chat_kicksPills: 'show',
     // NOTE: this duplicates KS.DEFAULT_SETTINGS in storage.js, which popup.html
     // does not load. Keep the two in step — when they drifted, new settings
     // rendered with the wrong state (clean chat showed as off while defaulting
@@ -79,15 +80,20 @@
   let _channel = new URLSearchParams(location.search).get('channel') || null;
   let _blockedChannels = [];
   let _blockedChatters = [];
+  let _recipes = [];
 
   // ── Storage helpers ────────────────────────────────────────────────────────
 
   function loadSettings() {
     return new Promise(resolve => {
       chrome.storage.sync.get(null, (synced) => {
-        chrome.storage.local.get(['channelOverrides', 'blockedChannels', 'blockedChatters'], (local) => {
+        chrome.storage.local.get(['channelOverrides', 'blockedChannels', 'blockedChatters', 'botRecipes'], (local) => {
           _blockedChannels = local.blockedChannels || [];
           _blockedChatters = local.blockedChatters || [];
+          // Never saved means the shipped defaults, not an empty list.
+          _recipes = Array.isArray(local.botRecipes)
+            ? local.botRecipes.map(KS.BotRecipes.normalise).filter(Boolean)
+            : KS.BotRecipes.defaults();
           _settings = Object.assign({}, DEFAULT, synced, local);
           resolve(_settings);
         });
@@ -154,7 +160,6 @@
     document.querySelectorAll('select[data-key]').forEach(sel => {
       sel.value = String(_settings[sel.dataset.key]);
     });
-
     // Number inputs
     document.querySelectorAll('input[type="number"][data-key]').forEach(inp => {
       inp.value = _settings[inp.dataset.key] ?? 0;
@@ -170,6 +175,7 @@
 
     _renderBlocklist();
     _renderBotlist();
+    _renderRecipes();
     _renderSources();
 
     // Scope radios
@@ -250,6 +256,264 @@
     // Reported only to sources with reporting switched on; if none are, this
     // resolves immediately having sent nothing.
     if (window.KS && KS.BotList) KS.BotList.submit(name, _settings).catch(() => {});
+  }
+
+  // ── Bot recipes ────────────────────────────────────────────────────────────
+  //
+  // Every field is rendered with textContent. A recipe can arrive pasted from a
+  // stranger in chat, so none of it may ever become markup.
+
+  // Which editor is open: { r, i } for a rule (i === -1 for a new one), or
+  // { r, recipe: true } for a recipe's name and channels. One at a time.
+  let _recipeEditing = null;
+
+  function _el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function _saveRecipes() {
+    chrome.storage.local.set({ botRecipes: _recipes }, _renderRecipes);
+  }
+
+  function _recipeMsg(text, isErr) {
+    const m = document.getElementById('recipe-msg');
+    if (!m) return;
+    m.textContent = text || '';
+    m.classList.toggle('ks-recipe-err', !!isErr);
+  }
+
+  function _ruleSummary(rule) {
+    const parts = [rule.account];
+    if (rule.start.length) parts.push('starts ' + rule.start.join(' '));
+    if (rule.end.length) parts.push('ends ' + rule.end.join(' '));
+    if (rule.contains.length) parts.push('contains "' + rule.contains.join('", "') + '"');
+    return parts.join(' · ');
+  }
+
+  // A labelled input in the two-column editor grid.
+  function _field(grid, label, value, placeholder) {
+    grid.appendChild(_el('label', null, label));
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.value = value || '';
+    if (placeholder) inp.placeholder = placeholder;
+    grid.appendChild(inp);
+    return inp;
+  }
+
+  function _ruleEditor(r, i) {
+    const recipe = _recipes[r];
+    const rule = i >= 0 ? recipe.rules[i]
+      : { label: '', account: (recipe.rules[0] && recipe.rules[0].account) || '', start: [], end: [], contains: [], hide: false };
+    const grid = _el('div', 'ks-recipe-edit');
+    const fLabel = _field(grid, 'Label', rule.label, 'Raids');
+    const fAcct = _field(grid, 'Account', rule.account, 'nedbot');
+    const fStart = _field(grid, 'Starts with', rule.start.join(', '), '🚀, 📊');
+    const fEnd = _field(grid, 'Ends with', rule.end.join(', '), '🃏');
+    const fHas = _field(grid, 'Contains', rule.contains.join(', '), 'some text');
+
+    const acts = _el('div', 'ks-recipe-actions');
+    const save = _el('button', 'ks-link-btn', 'Save');
+    const cancel = _el('button', 'ks-link-btn', 'Cancel');
+    const err = _el('span', 'ks-hint ks-recipe-err');
+    save.addEventListener('click', () => {
+      // Through the same validation as a pasted recipe, so the editor cannot
+      // store anything an import would refuse.
+      const check = KS.BotRecipes.normalise({ name: 'x', rules: [{
+        label: fLabel.value, account: fAcct.value,
+        start: fStart.value, end: fEnd.value, contains: fHas.value,
+        hide: rule.hide,
+      }] });
+      const clean = check && check.rules[0];
+      if (!clean) {
+        err.textContent = 'Needs an account name and at least one thing to match.';
+        return;
+      }
+      if (i >= 0) recipe.rules[i] = clean;
+      else recipe.rules.push(clean);
+      _recipeEditing = null;
+      _saveRecipes();
+    });
+    cancel.addEventListener('click', () => { _recipeEditing = null; _renderRecipes(); });
+    acts.append(save, cancel);
+    if (i >= 0) {
+      const del = _el('button', 'ks-link-btn', 'Delete rule');
+      del.addEventListener('click', () => {
+        recipe.rules.splice(i, 1);
+        _recipeEditing = null;
+        _saveRecipes();
+      });
+      acts.appendChild(del);
+    }
+    acts.appendChild(err);
+    grid.appendChild(acts);
+    return grid;
+  }
+
+  function _recipeEditor(r) {
+    const recipe = _recipes[r];
+    const grid = _el('div', 'ks-recipe-edit');
+    const fName = _field(grid, 'Name', recipe.name, 'NedBot');
+    const fChan = _field(grid, 'Channels', recipe.channels.join(', '), 'blank = every channel');
+    const acts = _el('div', 'ks-recipe-actions');
+    const save = _el('button', 'ks-link-btn', 'Save');
+    const cancel = _el('button', 'ks-link-btn', 'Cancel');
+    const err = _el('span', 'ks-hint ks-recipe-err');
+    save.addEventListener('click', () => {
+      const clean = KS.BotRecipes.normalise({ name: fName.value, channels: fChan.value, rules: recipe.rules });
+      if (!clean) { err.textContent = 'Needs a name.'; return; }
+      _recipes[r] = clean;
+      _recipeEditing = null;
+      _saveRecipes();
+    });
+    cancel.addEventListener('click', () => { _recipeEditing = null; _renderRecipes(); });
+    acts.append(save, cancel, err);
+    grid.appendChild(acts);
+    return grid;
+  }
+
+  function _renderRecipes() {
+    const box = document.getElementById('recipes-container');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!_recipes.length) {
+      box.appendChild(_el('p', 'ks-blocklist-empty', 'No recipes. Add one below, or restore NedBot\'s.'));
+      return;
+    }
+
+    _recipes.forEach((recipe, r) => {
+      const card = _el('div', 'ks-recipe');
+
+      const head = _el('div', 'ks-recipe-head');
+      head.appendChild(_el('span', 'ks-recipe-name', recipe.name));
+      head.appendChild(_el('span', 'ks-recipe-where',
+        recipe.channels.length ? 'only ' + recipe.channels.join(', ') : 'every channel'));
+      const edit = _el('button', 'ks-recipe-icon', '✎');
+      edit.title = 'Rename, or limit to channels';
+      edit.addEventListener('click', () => { _recipeEditing = { r, recipe: true }; _renderRecipes(); });
+      const share = _el('button', 'ks-recipe-icon', '⇪');
+      share.title = 'Share this recipe';
+      share.addEventListener('click', () => _shareRecipe(r));
+      // Two clicks rather than confirm(): a native dialog can close the
+      // extension popup when it takes focus.
+      const del = _el('button', 'ks-blocklist-remove', '✕');
+      del.title = 'Delete this recipe';
+      del.addEventListener('click', () => {
+        if (del.dataset.armed !== '1') {
+          del.dataset.armed = '1';
+          del.textContent = 'Delete?';
+          del.style.fontSize = '11px';
+          setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = '✕'; del.style.fontSize = ''; } }, 3000);
+          return;
+        }
+        _recipes.splice(r, 1);
+        _recipeEditing = null;
+        _saveRecipes();
+      });
+      head.append(edit, share, del);
+      card.appendChild(head);
+
+      if (_recipeEditing && _recipeEditing.r === r && _recipeEditing.recipe) {
+        card.appendChild(_recipeEditor(r));
+      }
+
+      recipe.rules.forEach((rule, i) => {
+        const row = _el('div', 'ks-recipe-rule');
+        const text = _el('div', 'ks-recipe-rule-text');
+        text.appendChild(_el('div', null, rule.label));
+        text.appendChild(_el('span', 'ks-hint', _ruleSummary(rule)));
+        const pen = _el('button', 'ks-recipe-icon', '✎');
+        pen.title = 'Change what this rule matches';
+        pen.addEventListener('click', () => { _recipeEditing = { r, i }; _renderRecipes(); });
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!rule.hide;
+        cb.title = 'Hide these messages';
+        cb.addEventListener('change', () => { rule.hide = cb.checked; _saveRecipes(); });
+        row.append(text, pen, cb);
+        card.appendChild(row);
+        if (_recipeEditing && _recipeEditing.r === r && _recipeEditing.i === i) {
+          card.appendChild(_ruleEditor(r, i));
+        }
+      });
+
+      if (_recipeEditing && _recipeEditing.r === r && _recipeEditing.i === -1) {
+        card.appendChild(_ruleEditor(r, -1));
+      } else {
+        const add = _el('button', 'ks-link-btn', '+ Add rule');
+        add.addEventListener('click', () => { _recipeEditing = { r, i: -1 }; _renderRecipes(); });
+        card.appendChild(add);
+      }
+      box.appendChild(card);
+    });
+  }
+
+  function _shareRecipe(r) {
+    const text = KS.BotRecipes.serialise(_recipes[r]);
+    const area = document.getElementById('recipe-text');
+    const box = document.getElementById('recipe-share-box');
+    if (!area || !text) return;
+    area.value = text;
+    if (box) box.open = true;
+    area.select();
+    // The text is in the box either way; the clipboard is a convenience.
+    navigator.clipboard.writeText(text)
+      .then(() => _recipeMsg('Copied — paste it to whoever you are sharing with.'))
+      .catch(() => _recipeMsg('Copy the text above to share it.'));
+  }
+
+  function _importRecipe() {
+    const area = document.getElementById('recipe-text');
+    let recipe;
+    try {
+      recipe = KS.BotRecipes.parse(area ? area.value : '');
+    } catch (e) {
+      _recipeMsg(e.message, true);
+      return;
+    }
+    // Never overwrite: the existing one may carry this user's own changes.
+    let name = recipe.name;
+    for (let n = 2; _recipes.some(x => x.name === name); n++) name = recipe.name + ' (' + n + ')';
+    recipe.name = name;
+    _recipes.push(recipe);
+    if (area) area.value = '';
+    _recipeMsg('Added "' + name + '" — ' + recipe.rules.length + ' rules. Check which ones are switched on.');
+    _saveRecipes();
+  }
+
+  // Puts NedBot's shipped recipe back, keeping the user's switches on any rule
+  // whose label still exists so restoring does not quietly undo their choices.
+  function _restoreNedBot() {
+    const fresh = KS.BotRecipes.defaults().find(x => x.name === 'NedBot');
+    if (!fresh) return;
+    const at = _recipes.findIndex(x => x.name === 'NedBot');
+    if (at >= 0) {
+      const had = new Map(_recipes[at].rules.map(rule => [rule.label, rule.hide]));
+      fresh.rules.forEach(rule => { if (had.has(rule.label)) rule.hide = had.get(rule.label); });
+      fresh.channels = _recipes[at].channels;
+      _recipes[at] = fresh;
+    } else {
+      _recipes.unshift(fresh);
+    }
+    _recipeEditing = null;
+    _recipeMsg('NedBot recipe restored.');
+    _saveRecipes();
+  }
+
+  function _wireRecipes() {
+    const on = (id, fn) => { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
+    on('recipe-import', _importRecipe);
+    on('recipe-restore', _restoreNedBot);
+    on('recipe-new', () => {
+      let name = 'New recipe';
+      for (let n = 2; _recipes.some(x => x.name === name); n++) name = 'New recipe ' + n;
+      _recipes.push({ name, channels: [], rules: [] });
+      _recipeEditing = { r: _recipes.length - 1, recipe: true };
+      _saveRecipes();
+    });
   }
 
   function _renderSources() {
@@ -372,6 +636,8 @@
         if (cb.dataset.key === 'chat_collapseGlobalCopypasta') _toggleSub('copypasta-options', cb.checked);
       });
     });
+
+    _wireRecipes();
 
     // Selects
     document.querySelectorAll('select[data-key]').forEach(sel => {
@@ -563,6 +829,7 @@
     'top-gifters': 'Top gifters', 'gift-animations': 'Gift animations',
     'pinned': 'Pinned messages', 'polls': 'Polls & predictions', 'goals': 'Goals',
     'autoplay': 'Autoplay overlays', 'ban-notice': 'Ban notice',
+    'bot-category': 'NedBot categories', 'kicks-pill': 'Kicks pills',
   };
 
   function _statsGroup(title, counts) {
