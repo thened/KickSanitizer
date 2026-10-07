@@ -1488,3 +1488,25 @@ body.ks-beta-logo a[href="/"]:has(> img[src*="kick-logo"])::after {
   color: #53fc18;
   pointer-events: none;
 }
+
+/* Back to live chat — shown while clean chat is scrolled up. Over the bottom
+   of the list, centred, like Kick's own. */
+.ks-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 2;
+  background: #53fc18;
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
+  color: #0b0e0f;
+  cursor: pointer;
+  font: 700 12px/1 system-ui, "Segoe UI", Arial, sans-serif;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+.ks-jump[hidden] { display: none; }
+.ks-jump:hover { filter: brightness(1.08); }
+.ks-jump:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

@@ -988,6 +988,7 @@ KS.Mirror = (function () {
     } catch (_) { }
 
     _host.addEventListener('scroll', _onScroll, { passive: true });
+    _mountJump(_host.parentElement);
     if (_origList.parentElement) {
       _origList.parentElement.addEventListener('mouseover', _onColumnHover, { passive: true });
     }
@@ -1036,6 +1037,8 @@ KS.Mirror = (function () {
   }
 
   function _unmount() {
+    if (_jump) { _jump.remove(); _jump = null; }
+    _unseen = 0;
     if (KS.ChatSocket) KS.ChatSocket.disconnect();
     _showNewMessagesIndicator();
     _restoreKickChat();
@@ -1379,7 +1382,45 @@ KS.Mirror = (function () {
     _prune();
     _updateCount();
     if (stick) _scrollToBottom();
+    else { _unseen++; _syncJump(); }
     _pinThroughImageLoads(clone);
+  }
+
+  // ── Back to live chat ──────────────────────────────────────────────────────
+  //
+  // Scrolling up pauses autoscroll, which is right for reading back — but Kick's
+  // own "N new messages" button is hidden in clean chat (its count describes
+  // Kick's list, not ours), and nothing replaced it, so the only way back was
+  // to scroll the whole distance by hand. Lives beside the list, not in it, so
+  // it neither scrolls away nor gets pruned.
+  let _jump = null;
+  let _unseen = 0;
+
+  function _mountJump(parent) {
+    if (!parent) return;
+    if (_jump && _jump.isConnected) return;
+    _jump = document.createElement('button');
+    _jump.type = 'button';
+    _jump.className = 'ks-jump';
+    _jump.hidden = true;
+    _jump.addEventListener('click', () => {
+      _stick = true;
+      _scrollToBottom();
+      _prune();
+      _unseen = 0;
+      _syncJump();
+    });
+    parent.appendChild(_jump);
+  }
+
+  function _syncJump() {
+    if (!_jump) return;
+    const show = !_stick && isOn();
+    _jump.hidden = !show;
+    if (!show) return;
+    _jump.textContent = _unseen > 0
+      ? '↓ ' + (_unseen > 99 ? '99+' : _unseen) + ' new message' + (_unseen === 1 ? '' : 's')
+      : '↓ Back to live chat';
   }
 
   function _prune() {
@@ -1407,7 +1448,8 @@ KS.Mirror = (function () {
     const wasStuck = _stick;
     _stick = _distFromBottom() <= STICK_PX;
     // Returning to the bottom releases the pruning deferred while scrolled up.
-    if (!wasStuck && _stick) _prune();
+    if (!wasStuck && _stick) { _prune(); _unseen = 0; }
+    if (wasStuck !== _stick) _syncJump();
   }
 
   function _scrollToBottom() {
