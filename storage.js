@@ -65,7 +65,10 @@ KS.DEFAULT_SETTINGS = {
   // Liked people (never filtered, highlighted) and disliked people (hidden).
   // LOCAL; carried between browsers by settings export and import.
   likedChatters: [],
-  ignoredChatters: [],            // pills above chat: 'show' | 'dismiss' (after ~8s) | 'hide'
+  ignoredChatters: [],
+  // Carry the lists above (and recipes, marked bots, hidden channels) to the
+  // user's other Chrome browsers — see utils/listSync.js. Itself synced.
+  sync_lists: true,            // pills above chat: 'show' | 'dismiss' (after ~8s) | 'hide'
   chat_keepDeletedMessages: false,    // re-show messages removed by bans/mod deletions
   chat_showTimestamps: false,         // force Kick's built-in timestamp spans to always show
   // Kick disables the chat input for a cooldown in slow mode; focus falls to
@@ -140,6 +143,9 @@ KS.getSettings = function () {
   return new Promise((resolve) => {
     chrome.storage.sync.get(null, (synced) => {
       chrome.storage.local.get(LOCAL_KEYS, (local) => {
+        // Sync storage also holds the list pieces written by utils/listSync.js.
+        // They are transport, not settings: the real lists are read from local.
+        for (const k of Object.keys(synced)) if (k.startsWith('ks.sync.')) delete synced[k];
         const settings = Object.assign({}, KS.DEFAULT_SETTINGS, synced, local);
         resolve(settings);
       });

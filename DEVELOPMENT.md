@@ -339,6 +339,28 @@ Import now takes every LOCAL list and validates each — names against the
 username pattern, recipes through the recipe normaliser — because an export is
 a file anyone can hand you.
 
+## List sync — `utils/listSync.js`
+
+The lists are LOCAL (sync allows 8 KB per item, 100 KB total). The service
+worker copies them into `chrome.storage.sync` as `ks.sync.<key>` (header:
+pieces, time, hash) plus `ks.sync.<key>.<i>` (pieces measured after
+JSON-encoding, ≤ 7000 bytes each), and pulls other browsers' changes back.
+Local stays the source of truth; nothing outside the worker knows sync exists.
+
+- Echo prevention: `ksSyncState` (local) remembers the hash last synced; a push
+  of matching content is skipped. Without it two browsers loop forever.
+- First contact merges (names union; recipes union by name, this browser's copy
+  kept on a clash) instead of overwriting. After that, newer wins.
+- Pieces can land separately; a pull whose pieces do not hash to the header
+  waits for the next change rather than writing half a list.
+- Synced data is validated like an import — it is the user's own, but nothing
+  stops a broken client or a hand edit writing nonsense.
+- Liked vs disliked conflicts across browsers resolve to disliked.
+- `ks.sync.*` keys are stripped wherever settings are read from sync, or they
+  would end up in the settings object and every export.
+- `tests/listSync.test.js` runs the real files as two simulated browsers on
+  one sync store with Chrome's per-item quota enforced.
+
 ## Bot list sources — what a server has to serve
 
 No server exists yet. `bots.nedbot.site` ships as a preset with both flags off;

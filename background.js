@@ -1,6 +1,17 @@
 // KickSanitizer — service worker
 // Handles install, storage migration, and cross-tab message relay.
 
+// List sync (utils/listSync.js) validates recipes with the same code the page
+// and popup use. That file attaches to `window`, which a service worker does
+// not have, so point it at the worker's global before loading.
+self.window = self;
+importScripts('utils/botRecipes.js', 'utils/listSync.js');
+
+// Listeners are registered at the top level, synchronously: a service worker
+// that registers them later misses the event that woke it.
+chrome.storage.onChanged.addListener((changes, area) => KS.ListSync.onChanged(changes, area));
+chrome.runtime.onStartup.addListener(() => { KS.ListSync.pullAll().catch(() => {}); });
+
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === 'install') {
     console.log('[KickSanitizer] Installed. Defaults applied on first use.');
@@ -8,6 +19,9 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === 'update') {
     console.log('[KickSanitizer] Updated to', chrome.runtime.getManifest().version);
   }
+  // A new install picks up lists from the user's other browsers; an update
+  // (or the first version with sync) sends this browser's lists out.
+  KS.ListSync.pullAll().then(() => KS.ListSync.pushAll()).catch(() => {});
 });
 
 // Open the settings UI from the in-page panel's "Open full settings" button.

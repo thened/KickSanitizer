@@ -69,6 +69,7 @@
     page_forceViewerCount: false,
     page_liveSaysLame: false,
     page_betaLogo: false,
+    sync_lists: true,
     scope: 'all',
     developerMode: false,
   };
@@ -97,6 +98,9 @@
   function loadSettings() {
     return new Promise(resolve => {
       chrome.storage.sync.get(null, (synced) => {
+        // List pieces from utils/listSync.js are transport, not settings — and
+        // without this they would be written into every settings export.
+        for (const k of Object.keys(synced)) if (k.startsWith('ks.sync.')) delete synced[k];
         chrome.storage.local.get(LOCAL_LISTS, (local) => {
           _blockedChannels = local.blockedChannels || [];
           _blockedChatters = local.blockedChatters || [];
@@ -189,6 +193,7 @@
     _renderBotlist();
     _renderPeople();
     _renderRecipes();
+    _renderSyncStatus();
     _renderSources();
 
     // Scope radios
@@ -269,6 +274,28 @@
     // Reported only to sources with reporting switched on; if none are, this
     // resolves immediately having sent nothing.
     if (window.KS && KS.BotList) KS.BotList.submit(name, _settings).catch(() => {});
+  }
+
+  // What utils/listSync.js last managed, so a list that is too big to sync, or
+  // a quota error, is visible rather than silently local-only.
+  function _renderSyncStatus() {
+    const el = document.getElementById('sync-status');
+    if (!el) return;
+    if (_settings.sync_lists === false) { el.textContent = 'Off — lists stay in this browser.'; return; }
+    chrome.storage.local.get(['ksSyncStatus'], (d) => {
+      const st = d.ksSyncStatus || {};
+      const LABEL = { likedChatters: 'liked', ignoredChatters: 'disliked', botRecipes: 'recipes',
+                      blockedChatters: 'marked bots', blockedChannels: 'hidden channels' };
+      const failed = Object.keys(st).filter(k => !st[k].ok);
+      const last = Math.max(0, ...Object.values(st).filter(s => s.ok).map(s => s.at));
+      if (failed.length) {
+        el.textContent = 'Not syncing ' + failed.map(k => (LABEL[k] || k) + ' (' + st[k].error + ')').join(', ') + '.';
+        el.classList.add('ks-recipe-err');
+      } else {
+        el.classList.remove('ks-recipe-err');
+        el.textContent = last ? 'Last synced ' + new Date(last).toLocaleString() + '.' : 'Nothing synced yet.';
+      }
+    });
   }
 
   // Liked and disliked people. Names came from chat, so textContent only — the

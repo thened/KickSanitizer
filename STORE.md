@@ -134,8 +134,9 @@ Individual suggested channels can be dismissed permanently.
 PRIVACY
 
 No account required. No analytics. No tracking. No data is sent anywhere.
-Your settings are stored by Chrome and never leave your browser except through
-Chrome's own sync, if you have it enabled.
+Your settings and lists (liked and disliked people, recipes, marked bots) are
+stored by Chrome and never leave your browser except through Chrome's own sync,
+if you have it enabled — and the lists' sync can be switched off on its own.
 
 Runs only on kick.com. Does not run on dashboard.kick.com.
 
@@ -165,8 +166,11 @@ Each of these has to be filled in on the submission form.
 ### `storage`
 
 ```
-Stores the user's own filter settings and per-channel overrides so they persist
-between sessions. Nothing else is stored, and nothing is transmitted.
+Stores the user's own filter settings, per-channel overrides, and their own
+lists (people they like or dislike, filter recipes, accounts marked as bots) so
+they persist between sessions. Settings and lists are carried between the
+user's own browsers by Chrome Sync when they have it enabled; the extension
+transmits none of it anywhere itself.
 ```
 
 ### Host permission `*://*.kick.com/*`
